@@ -22,6 +22,10 @@ else
 fi
 export QUILLTAP_DATA_DIR
 
+# Pass through shell identification env vars (set by WSLManager)
+export QUILLTAP_SHELL="${QUILLTAP_SHELL:-}"
+export QUILLTAP_SHELL_CAPABILITIES="${QUILLTAP_SHELL_CAPABILITIES:-}"
+
 # If host timezone was passed, set the TZ env var so Node.js uses it
 if [ -n "${QUILLTAP_TIMEZONE:-}" ]; then
   export TZ="$QUILLTAP_TIMEZONE"

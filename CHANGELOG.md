@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.3
+
+### Features
+
+- **Shell identity env vars**: The shell now passes `QUILLTAP_SHELL` (version string) and `QUILLTAP_SHELL_CAPABILITIES` (comma-delimited capability flags) to the server in all launch modes — embedded, Docker (`-e`), Lima (template placeholders), and WSL2 (inherited env). The canonical capabilities value lives in `SHELL_CAPABILITIES` in `electron/constants.ts`. Capabilities are empty for now, awaiting future flags like `OPENS_FS_PATH` and `DOWNLOADS_FILE`.
+
 ## 4.0.2
 
 ### Fixes

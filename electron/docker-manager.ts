@@ -6,6 +6,7 @@ import {
   DOCKER_CONTAINER_PORT,
   HOST_PORT,
   APP_VERSION,
+  SHELL_CAPABILITIES,
   vmNameForDir,
 } from './constants';
 import { IVMManager } from './vm-manager';
@@ -166,6 +167,8 @@ export class DockerManager implements IVMManager {
       '-p', `${HOST_PORT}:${DOCKER_CONTAINER_PORT}`,
       '-v', `${this.dataDir}:/app/quilltap`,
       '-e', `QUILLTAP_HOST_DATA_DIR=${this.dataDir}`,
+      '-e', `QUILLTAP_SHELL=${APP_VERSION}`,
+      '-e', `QUILLTAP_SHELL_CAPABILITIES=${SHELL_CAPABILITIES}`,
       // Linux Docker Engine doesn't provide host.docker.internal by default
       ...(process.platform === 'linux' ? ['--add-host=host.docker.internal:host-gateway'] : []),
       imageRef,

@@ -172,6 +172,14 @@ export const APP_VERSION = (() => {
   }
 })();
 
+/**
+ * Comma-delimited capability flags advertised to the Quilltap server via the
+ * QUILLTAP_SHELL_CAPABILITIES environment variable.  Add new flags here when
+ * the shell gains functionality the server needs to know about (e.g.
+ * "OPENS_FS_PATH", "DOWNLOADS_FILE").
+ */
+export const SHELL_CAPABILITIES = '';
+
 /** Default rootfs download URL — GitHub Releases asset for current version */
 export const DEFAULT_ROOTFS_URL = APP_VERSION
   ? `https://github.com/${GITHUB_REPO}/releases/download/${APP_VERSION}/${ROOTFS_FILENAME}`

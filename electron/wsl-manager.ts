@@ -8,6 +8,8 @@ import {
   VM_CREATE_TIMEOUT_S,
   VM_START_TIMEOUT_S,
   VM_STOP_TIMEOUT_S,
+  APP_VERSION,
+  SHELL_CAPABILITIES,
 } from './constants';
 import { VMStatus, CommandResult } from './types';
 import { IVMManager } from './vm-manager';
@@ -249,6 +251,10 @@ export class WSLManager implements IVMManager {
     } catch {
       // Intl not available — backend will use system default
     }
+
+    // Advertise shell version and capabilities to the server
+    envVars.push(`QUILLTAP_SHELL=${APP_VERSION}`);
+    envVars.push(`QUILLTAP_SHELL_CAPABILITIES=${SHELL_CAPABILITIES}`);
 
     if (envVars.length > 0) {
       wslArgs.push('env', ...envVars);

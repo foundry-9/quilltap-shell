@@ -10,6 +10,8 @@ import {
   VM_CREATE_TIMEOUT_S,
   VM_START_TIMEOUT_S,
   VM_STOP_TIMEOUT_S,
+  APP_VERSION,
+  SHELL_CAPABILITIES,
   vmNameForDir,
   DIR_MAP_PATH,
 } from './constants';
@@ -311,6 +313,16 @@ export class LimaManager implements IVMManager {
     modified = modified.replace(
       /QUILLTAP_TIMEZONE="[^"]*"/g,
       `QUILLTAP_TIMEZONE="${hostTimezone}"`
+    );
+
+    // Replace QUILLTAP_SHELL and QUILLTAP_SHELL_CAPABILITIES placeholders
+    modified = modified.replace(
+      /QUILLTAP_SHELL="[^"]*"/g,
+      `QUILLTAP_SHELL="${APP_VERSION}"`
+    );
+    modified = modified.replace(
+      /QUILLTAP_SHELL_CAPABILITIES="[^"]*"/g,
+      `QUILLTAP_SHELL_CAPABILITIES="${SHELL_CAPABILITIES}"`
     );
 
     // Write to a temp file in LIMA_HOME

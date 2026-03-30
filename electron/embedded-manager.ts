@@ -1,7 +1,7 @@
 import { ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { HOST_PORT, STANDALONE_CACHE_DIR } from './constants';
+import { HOST_PORT, STANDALONE_CACHE_DIR, APP_VERSION, SHELL_CAPABILITIES } from './constants';
 
 /** Append a line to the embedded server log file in the data directory */
 function appendServerLog(dataDir: string, line: string): void {
@@ -136,6 +136,8 @@ export class EmbeddedManager {
         NODE_ENV: 'production',
         QUILLTAP_DATA_DIR: dataDir,
         QUILLTAP_TIMEZONE: hostTimezone,
+        QUILLTAP_SHELL: APP_VERSION,
+        QUILLTAP_SHELL_CAPABILITIES: SHELL_CAPABILITIES,
         NODE_OPTIONS: '--max-old-space-size=2048',
         // Module resolution
         NODE_PATH: modulesDir,

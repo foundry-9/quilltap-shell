@@ -66,6 +66,8 @@ provision:
       export HOSTNAME=0.0.0.0
       export NODE_OPTIONS="--max-old-space-size=2048"
       export QUILLTAP_TIMEZONE=""
+      export QUILLTAP_SHELL=""
+      export QUILLTAP_SHELL_CAPABILITIES=""
       ENVEOF
       chmod 644 /etc/profile.d/quilltap.sh
 
@@ -124,6 +126,8 @@ provision:
       export HOSTNAME=0.0.0.0
       export NODE_OPTIONS="--max-old-space-size=2048"
       export QUILLTAP_TIMEZONE=""
+      export QUILLTAP_SHELL=""
+      export QUILLTAP_SHELL_CAPABILITIES=""
 
       depend() {
         need net
