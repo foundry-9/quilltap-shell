@@ -1,0 +1,78 @@
+publish: null
+appId: com.foundry9.quilltap
+productName: Quilltap
+directories:
+  output: out
+  buildResources: electron/resources
+files:
+  # Include compiled Electron code and splash screen assets
+  - dist-electron/**/*
+  - electron/splash/**/*
+  - package.json
+  # Include native module dependencies (better-sqlite3, sharp, tar, etc.)
+  # These are symlinked into the downloaded standalone at runtime
+  - node_modules/better-sqlite3-multiple-ciphers/**/*
+  - node_modules/sharp/**/*
+  - node_modules/@img/**/*
+  - node_modules/tar/**/*
+  - node_modules/minipass/**/*
+  - node_modules/minizlib/**/*
+  - node_modules/mkdirp/**/*
+  - node_modules/yallist/**/*
+  - node_modules/yauzl/**/*
+  # Exclude everything else from the project
+  - "!lima/**/*"
+  - "!electron/*.ts"
+# Native modules are rebuilt in build scripts against Electron's Node ABI.
+# Disable electron-builder's own @electron/rebuild to prevent it from scanning the
+# project's node_modules (which contains .bin symlinks that break macOS codesign).
+npmRebuild: false
+afterSign: electron/notarize.js
+mac:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+  category: public.app-category.productivity
+  # We handle notarization in afterSign hook (electron/notarize.js)
+  notarize: false
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  hardenedRuntime: true
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  icon: electron/resources/icon.icns
+  signIgnore:
+    - "lima/share/lima/lima-guestagent"
+  extraResources:
+    - from: lima/quilltap.yaml
+      to: lima/quilltap.yaml
+win:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+  # --- Azure Trusted Signing (uncomment when ready) ---
+  # azureSignOptions:
+  #   publisherName: "Charles Sebold"
+  #   endpoint: "https://cus.codesigning.azure.net/"
+  #   certificateProfileName: "quilltap"
+  #   codeSigningAccountName: "quilltap"
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: electron/resources/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Quilltap
+linux:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  category: Utility
+  icon: electron/resources/icon.png
