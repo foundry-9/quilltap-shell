@@ -48,6 +48,8 @@ mac:
   extraResources:
     - from: lima/quilltap.yaml
       to: lima/quilltap.yaml
+    - from: electron/resources/lima/
+      to: lima/
 win:
   artifactName: "${productName}-${version}-${arch}.${ext}"
   # --- Azure Trusted Signing (uncomment when ready) ---

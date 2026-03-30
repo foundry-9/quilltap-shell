@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.2
+
+### Fixes
+
+- **Lima binary bundling**: Restored the `stage-lima.ts` build script that downloads Lima binaries from GitHub Releases and stages them into the Electron app bundle. Without this, packaged builds had no `limactl` binary and Lima mode could not start. Added `electron:stage-lima` npm script and wired it into the macOS build pipeline. The `electron-builder.yml` now includes the staged binaries directory as an `extraResources` entry alongside the existing Lima template YAML.
+
 ## 4.0.1
 
 ### Features

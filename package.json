@@ -1,6 +1,6 @@
 {
   "name": "quilltap-shell",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "Electron desktop shell for the Quilltap server",
   "main": "dist-electron/main.js",
   "private": true,
@@ -19,9 +19,10 @@
   "scripts": {
     "electron:compile": "tsc -p electron/tsconfig.json",
     "electron:rebuild-native": "npx tsx scripts/rebuild-native-modules.ts",
+    "electron:stage-lima": "npx tsx scripts/stage-lima.ts",
     "electron:dev": "npm run electron:compile && cross-env ELECTRON_DEV=1 electron dist-electron/main.js",
-    "electron:build:mac": "npm run electron:compile && npm run electron:rebuild-native && electron-builder --mac",
-    "electron:build:mac:dev": "npm run electron:compile && npm run electron:rebuild-native && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac -c.mac.identity=null",
+    "electron:build:mac": "npm run electron:stage-lima && npm run electron:compile && npm run electron:rebuild-native && electron-builder --mac",
+    "electron:build:mac:dev": "npm run electron:stage-lima && npm run electron:compile && npm run electron:rebuild-native && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac -c.mac.identity=null",
     "electron:build:win": "npm run electron:compile && npm run electron:rebuild-native && electron-builder --win",
     "electron:build:linux": "npm run electron:compile && npm run electron:rebuild-native && electron-builder --linux",
     "typecheck": "tsc -p electron/tsconfig.json --noEmit",
