@@ -160,11 +160,7 @@ function updateRuntimeButtons() {
 
 /** Update the version selector visibility and contents */
 function updateVersionSelector(versions, serverVersion) {
-  // Only show for embedded mode
-  if (currentRuntimeMode !== 'embedded') {
-    versionSection.style.display = 'none';
-    return;
-  }
+  // Show version selector for all runtime modes
   versionSection.style.display = '';
 
   // Preserve state across calls that don't provide new data

@@ -16,6 +16,7 @@ import {
   APP_VERSION,
   DOCKER_IMAGE,
   vmBuildIdPath,
+  rootfsDownloadUrl,
 } from './constants';
 import { IVMManager, createVMManager } from './vm-manager';
 import { LimaManager } from './lima-manager';
@@ -143,7 +144,7 @@ function sendDirectoryInfo(): void {
 
   // Phase 3: Fetch available versions if not yet cached
   if (!cachedAvailableVersions) {
-    standaloneManager.getAvailableVersions('3.2.0').then((versions) => {
+    standaloneManager.getAvailableVersions('3.2.0', appSettings.runtimeMode).then((versions) => {
       cachedAvailableVersions = versions;
       if (splashWindow && !splashWindow.isDestroyed()) {
         const updated: DirectoryInfo = { ...common, sizes: {}, availableVersions: versions };
@@ -877,16 +878,49 @@ async function startupSequence(dataDir: string): Promise<void> {
     return;
   }
 
-  // Step 2: Check if rootfs needs downloading
+  // Step 2: Resolve target version from settings (same logic as embedded/docker modes)
+  let targetVersion = appSettings.serverVersion || '';
+  if (!targetVersion || targetVersion === 'latest' || targetVersion === 'latest-dev') {
+    try {
+      const channel = targetVersion === 'latest-dev' ? 'dev' : 'release';
+      sendSplashUpdate({
+        phase: 'initializing',
+        message: 'Checking for latest server version...',
+      });
+      targetVersion = await standaloneManager.getLatestVersion(channel);
+      console.log(`[Main] VM: resolved server version: ${targetVersion}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[Main] Could not fetch latest version from GitHub:', msg);
+      // Fall back to APP_VERSION if offline
+      if (APP_VERSION) {
+        console.log(`[Main] VM: falling back to app version: ${APP_VERSION}`);
+        targetVersion = APP_VERSION;
+      } else {
+        sendSplashError(
+          `Could not determine server version for VM.\n\n` +
+          `Check your internet connection and try again.\n\n` +
+          `Error: ${msg}`,
+          true,
+        );
+        return;
+      }
+    }
+  }
+
+  // Configure download manager with the resolved version
+  downloadManager.setTargetVersion(targetVersion);
+
+  // Step 2b: Check if rootfs needs downloading
   if (downloadManager.needsDownload()) {
     sendSplashUpdate({
       phase: 'downloading',
       message: 'Downloading system image...',
-      detail: 'This only happens on first launch',
+      detail: `Version ${targetVersion} — this only happens on first launch or after updates`,
     });
 
     try {
-      const downloadUrl = process.env.QUILLTAP_ROOTFS_URL || DEFAULT_ROOTFS_URL;
+      const downloadUrl = process.env.QUILLTAP_ROOTFS_URL || rootfsDownloadUrl(targetVersion);
       if (!downloadUrl) {
         sendSplashError(
           'No rootfs tarball found and no download URL available. ' +
@@ -1137,22 +1171,49 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     console.warn('[Main] Could not stop embedded server (non-fatal):', err);
   }
 
-  // Step 3: Ensure the version-matched Docker image is available
-  if (!APP_VERSION) {
-    sendSplashError('Cannot determine app version — Docker mode requires a version-tagged image.', false);
-    return;
+  // Step 3: Resolve target version from settings (same logic as embedded mode)
+  let targetVersion = appSettings.serverVersion || '';
+  if (!targetVersion || targetVersion === 'latest' || targetVersion === 'latest-dev') {
+    try {
+      const channel = targetVersion === 'latest-dev' ? 'dev' : 'release';
+      sendSplashUpdate({
+        phase: 'initializing',
+        message: 'Checking for latest server version...',
+      });
+      targetVersion = await standaloneManager.getLatestVersion(channel);
+      console.log(`[Main] Docker: resolved server version: ${targetVersion}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[Main] Could not fetch latest version from GitHub:', msg);
+      // Fall back to APP_VERSION if offline
+      if (APP_VERSION) {
+        console.log(`[Main] Docker: falling back to app version: ${APP_VERSION}`);
+        targetVersion = APP_VERSION;
+      } else {
+        sendSplashError(
+          `Could not determine server version for Docker.\n\n` +
+          `Check your internet connection and try again.\n\n` +
+          `Error: ${msg}`,
+          true,
+        );
+        return;
+      }
+    }
   }
 
-  const versionExists = await dockerManager.imageExistsLocally(APP_VERSION);
+  dockerManager.setImageVersion(targetVersion);
+
+  // Step 4: Ensure the version-matched Docker image is available
+  const versionExists = await dockerManager.imageExistsLocally(targetVersion);
   if (!versionExists) {
     // Try to pull the version-specific tag
     sendSplashUpdate({
       phase: 'pulling-image',
       message: 'Pulling Quilltap image...',
-      detail: `${DOCKER_IMAGE}:${APP_VERSION}`,
+      detail: `${DOCKER_IMAGE}:${targetVersion}`,
     });
 
-    const pullResult = await dockerManager.pullImage(APP_VERSION, (line) => {
+    const pullResult = await dockerManager.pullImage(targetVersion, (line) => {
       sendSplashUpdate({
         phase: 'pulling-image',
         message: 'Pulling Quilltap image...',
@@ -1162,8 +1223,8 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
 
     if (!pullResult.success) {
       sendSplashError(
-        `Failed to pull Docker image ${DOCKER_IMAGE}:${APP_VERSION}.\n\n` +
-        `The Electron app requires the exact matching Docker image for version ${APP_VERSION}.\n\n` +
+        `Failed to pull Docker image ${DOCKER_IMAGE}:${targetVersion}.\n\n` +
+        `This version may not have a Docker image available. Try a different version.\n\n` +
         `Error: ${pullResult.error}`,
         true
       );
@@ -1574,9 +1635,13 @@ ipcMain.on('splash:set-runtime-mode', (_event, mode: string) => {
   console.log('[Main] Runtime mode set to:', runtimeMode);
   appSettings.runtimeMode = runtimeMode;
   saveSettings(appSettings);
+
+  // Invalidate cached versions — each mode filters by different assets
+  cachedAvailableVersions = null;
+  sendDirectoryInfo();
 });
 
-/** Set the server version for embedded mode */
+/** Set the server version (applies to all runtime modes) */
 ipcMain.on('splash:set-server-version', (_event, version: string) => {
   console.log('[Main] Server version set to:', version);
   appSettings.serverVersion = version;

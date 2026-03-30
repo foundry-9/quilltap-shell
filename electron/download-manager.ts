@@ -16,6 +16,8 @@ import { DownloadProgress } from './types';
  * retry logic, and cache management.
  */
 export class DownloadManager {
+  private targetVersion: string = APP_VERSION;
+
   /**
    * Check if the rootfs tarball needs downloading.
    * Returns true if the tarball is missing OR if the cached tarball's
@@ -25,17 +27,17 @@ export class DownloadManager {
   needsDownload(): boolean {
     if (!fs.existsSync(ROOTFS_PATH)) return true;
 
-    // If we can't determine the app version, trust the existing file
-    if (!APP_VERSION) return false;
+    // If we can't determine the target version, trust the existing file
+    if (!this.targetVersion) return false;
 
-    // Check the build-ID sidecar to see if the cached tarball matches this app version
+    // Check the build-ID sidecar to see if the cached tarball matches the target version
     try {
       const buildId = fs.readFileSync(ROOTFS_BUILD_ID_PATH, 'utf-8').trim();
       // Build ID format: "VERSION+TIMESTAMP" (e.g., "3.0.0+2026-02-17T12:00:00Z")
       const cachedVersion = buildId.split('+')[0];
-      if (cachedVersion !== APP_VERSION) {
+      if (cachedVersion !== this.targetVersion) {
         console.log(
-          `[DownloadManager] Cached rootfs version "${cachedVersion}" does not match app version "${APP_VERSION}" — re-downloading`
+          `[DownloadManager] Cached rootfs version "${cachedVersion}" does not match target version "${this.targetVersion}" — re-downloading`
         );
         // Remove stale tarball and build-ID so the download writes fresh ones
         try { fs.unlinkSync(ROOTFS_PATH); } catch { /* ignore */ }
@@ -51,6 +53,11 @@ export class DownloadManager {
     }
 
     return false;
+  }
+
+  /** Set the target version for rootfs version comparison */
+  setTargetVersion(version: string): void {
+    this.targetVersion = version;
   }
 
   /**
@@ -162,9 +169,9 @@ export class DownloadManager {
             fs.renameSync(tempPath, ROOTFS_PATH);
 
             // Write build-ID sidecar so future launches can verify the version
-            if (APP_VERSION) {
+            if (this.targetVersion) {
               try {
-                const buildId = `${APP_VERSION}+${new Date().toISOString()}`;
+                const buildId = `${this.targetVersion}+${new Date().toISOString()}`;
                 fs.writeFileSync(ROOTFS_BUILD_ID_PATH, buildId, 'utf-8');
                 console.log(`[DownloadManager] Wrote build-ID sidecar: ${buildId}`);
               } catch (err) {

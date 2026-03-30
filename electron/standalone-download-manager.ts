@@ -3,10 +3,11 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { DownloadProgress, VersionOption } from './types';
+import { DownloadProgress, RuntimeMode, VersionOption } from './types';
 import {
   STANDALONE_CACHE_DIR,
   GITHUB_REPO,
+  ROOTFS_FILENAME,
   DOWNLOAD_MAX_RETRIES,
   DOWNLOAD_PROGRESS_THROTTLE_MS,
 } from './constants';
@@ -119,16 +120,24 @@ export class StandaloneDownloadManager {
    * Fetch available server versions from GitHub Releases, filtered to >= minVersion.
    * Returns VersionOption[] sorted newest-first. Includes both stable and prerelease.
    */
-  async getAvailableVersions(minVersion: string = '3.2.0'): Promise<VersionOption[]> {
+  async getAvailableVersions(minVersion: string = '3.2.0', mode?: RuntimeMode): Promise<VersionOption[]> {
     const releases = await this.githubApiGet(`/repos/${GITHUB_REPO}/releases?per_page=100`);
 
     const minParts = minVersion.split('.').map(Number);
 
     return (releases as Array<{ tag_name: string; prerelease: boolean; assets: Array<{ name: string }> }>)
       .filter((r) => {
-        // Must have a standalone tarball asset
-        const hasStandalone = r.assets.some((a) => a.name.startsWith('quilltap-standalone-'));
-        if (!hasStandalone) return false;
+        // Filter by available assets for the requested runtime mode
+        if (mode === 'docker') {
+          // All tagged releases are assumed to have Docker images
+        } else if (mode === 'vm') {
+          const hasRootfs = r.assets.some((a: { name: string }) => a.name === ROOTFS_FILENAME);
+          if (!hasRootfs) return false;
+        } else {
+          // Default (embedded): must have a standalone tarball asset
+          const hasStandalone = r.assets.some((a) => a.name.startsWith('quilltap-standalone-'));
+          if (!hasStandalone) return false;
+        }
 
         // Filter by minimum version (compare only major.minor.patch, ignore prerelease suffix)
         const baseTag = r.tag_name.replace(/^v/, '').split('-')[0];

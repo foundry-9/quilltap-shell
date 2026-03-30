@@ -1,8 +1,17 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1-dev
+
+### Features
+
+- **Version selector for all runtime modes**: The server version dropdown now appears for Docker and VM (Lima/WSL2) modes, not just embedded/direct mode. Each mode filters available versions by the assets that exist for it (standalone tarballs for embedded, rootfs tarballs for VM, all tagged releases for Docker). Switching runtime modes refreshes the version list automatically.
+- **Docker version selection**: Docker mode now pulls the user-selected version tag from `foundry9/quilltap` instead of being locked to the Electron app version. Falls back to the app version if offline.
+- **VM version selection**: VM mode now downloads the rootfs tarball for the user-selected version instead of being locked to the app version. Falls back to the app version if offline.
+
 ## 4.0.1
 
 ### Fixes
+
 - **Native module copy from asar**: Replaced `fs.cpSync` with a recursive read/write copy that works when source modules are inside Electron's asar archive, fixing packaged builds failing to copy `sharp` and other JS modules into the standalone server directory.
 - **Force-overwrite native modules**: Native modules (`better-sqlite3`, `sharp`, `@img/*`) are now always overwritten regardless of version match, since the tarball ships Node.js ABI binaries that must be replaced with Electron ABI binaries.
 - **Copy all `@img` packages**: The `@img` copy filter no longer skips non-platform packages like `@img/colour`, which is a required dependency of `sharp`.
@@ -13,11 +22,13 @@
 ## 4.0.0
 
 ### Features
+
 - **Server version selector**: Dropdown in the splash screen directory chooser (visible in Direct/embedded mode) lets you choose which Quilltap server version to run — Latest Release, Latest Dev, or a specific tag. Fetched from GitHub Releases API, filtered to versions >= 3.2.0.
 - **Build script for native modules**: `scripts/rebuild-native-modules.ts` rebuilds better-sqlite3 and installs platform-specific sharp binaries against Electron's Node ABI at build time, so no local Node.js is needed at runtime.
 - **Server cache cleanup**: `npm run clean:server-cache` removes the downloaded standalone server cache.
 
 ### Fixes
+
 - **Native module ABI mismatch**: Native modules are now rebuilt against Electron's headers during the build process, fixing the `NODE_MODULE_VERSION` mismatch that prevented the embedded server from starting.
 - **Native module copy (not symlink)**: Copies native modules from `app.asar.unpacked` into the standalone directory instead of symlinking, fixing transitive dependency resolution issues (`bindings`, `file-uri-to-path`).
 - **Broken symlink cleanup**: Uses `lstatSync` instead of `existsSync` to detect and remove stale/broken symlinks before re-linking.
@@ -26,8 +37,8 @@
 - **Error screen usability**: Error container is no longer draggable (`-webkit-app-region: no-drag`) and error text is selectable/copyable (`user-select: text`).
 
 ### Build Changes
+
 - All `electron:build:*` scripts now run `electron:rebuild-native` before packaging.
 - `electron-builder.yml` updated to include `bindings` and `file-uri-to-path` in the packaged app, and corrected the `better-sqlite3` alias directory name.
 - Added `@electron/rebuild` as a dev dependency.
 - Version bumped to 4.0.0.
-

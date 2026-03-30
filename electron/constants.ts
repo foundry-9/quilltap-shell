@@ -176,3 +176,8 @@ export const APP_VERSION = (() => {
 export const DEFAULT_ROOTFS_URL = APP_VERSION
   ? `https://github.com/${GITHUB_REPO}/releases/download/${APP_VERSION}/${ROOTFS_FILENAME}`
   : '';
+
+/** Build a rootfs download URL for a specific version */
+export function rootfsDownloadUrl(version: string): string {
+  return `https://github.com/${GITHUB_REPO}/releases/download/${version}/${ROOTFS_FILENAME}`;
+}

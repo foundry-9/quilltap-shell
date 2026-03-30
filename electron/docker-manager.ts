@@ -83,6 +83,7 @@ function resolveDockerPath(): string {
 export class DockerManager implements IVMManager {
   private dockerPath: string;
   private dataDir: string = '';
+  private imageVersion: string = APP_VERSION;
   private containerName: string = '';
 
   constructor() {
@@ -115,6 +116,17 @@ export class DockerManager implements IVMManager {
     return this.containerName;
   }
 
+  /** Set the Docker image version tag to use */
+  setImageVersion(version: string): void {
+    this.imageVersion = version;
+    console.log('[DockerManager] Image version set to:', this.imageVersion);
+  }
+
+  /** Get the current Docker image version tag */
+  getImageVersion(): string {
+    return this.imageVersion;
+  }
+
   /** Check whether an image exists locally */
   async imageExistsLocally(tag: string): Promise<boolean> {
     const result = await this.exec(['image', 'inspect', `${DOCKER_IMAGE}:${tag}`], 10_000);
@@ -141,12 +153,11 @@ export class DockerManager implements IVMManager {
     await this.exec(['rm', '-f', this.containerName], 10_000);
 
     // Always use the version-specific image tag — no fallback to latest
-    if (!APP_VERSION) {
-      return { success: false, stdout: '', stderr: '', error: 'APP_VERSION is not set — cannot determine which Docker image to run' };
+    if (!this.imageVersion) {
+      return { success: false, stdout: '', stderr: '', error: 'No image version set — cannot determine which Docker image to run' };
     }
-    const imageTag = APP_VERSION;
 
-    const imageRef = `${DOCKER_IMAGE}:${imageTag}`;
+    const imageRef = `${DOCKER_IMAGE}:${this.imageVersion}`;
     console.log('[DockerManager] Starting container:', this.containerName, 'from', imageRef);
 
     const args = [
@@ -237,10 +248,10 @@ export class DockerManager implements IVMManager {
 
   /** Create VM — for Docker this means pulling the image */
   async createVM(onOutput?: (line: string) => void): Promise<CommandResult> {
-    if (!APP_VERSION) {
-      return { success: false, stdout: '', stderr: '', error: 'APP_VERSION is not set' };
+    if (!this.imageVersion) {
+      return { success: false, stdout: '', stderr: '', error: 'No image version set' };
     }
-    return this.pullImage(APP_VERSION, onOutput);
+    return this.pullImage(this.imageVersion, onOutput);
   }
 
   /** Start VM — delegates to startContainer */
@@ -259,10 +270,10 @@ export class DockerManager implements IVMManager {
     await this.stopContainer();
 
     // Remove the image
-    if (!APP_VERSION) {
-      return { success: false, stdout: '', stderr: '', error: 'APP_VERSION is not set' };
+    if (!this.imageVersion) {
+      return { success: false, stdout: '', stderr: '', error: 'No image version set' };
     }
-    const imageRef = `${DOCKER_IMAGE}:${APP_VERSION}`;
+    const imageRef = `${DOCKER_IMAGE}:${this.imageVersion}`;
     console.log('[DockerManager] Removing image:', imageRef);
     return this.exec(['rmi', imageRef], 30_000);
   }
@@ -279,8 +290,8 @@ export class DockerManager implements IVMManager {
 
   /** Get the disk size of the Docker image in bytes (-1 if not found) */
   async getVMDiskSize(): Promise<number> {
-    if (!APP_VERSION) return -1;
-    const imageRef = `${DOCKER_IMAGE}:${APP_VERSION}`;
+    if (!this.imageVersion) return -1;
+    const imageRef = `${DOCKER_IMAGE}:${this.imageVersion}`;
     const result = await this.exec(['image', 'inspect', '--format', '{{.Size}}', imageRef], 10_000);
     if (!result.success) return -1;
     const size = parseInt(result.stdout.trim(), 10);
