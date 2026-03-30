@@ -1,5 +1,15 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.1
+
+### Fixes
+- **Native module copy from asar**: Replaced `fs.cpSync` with a recursive read/write copy that works when source modules are inside Electron's asar archive, fixing packaged builds failing to copy `sharp` and other JS modules into the standalone server directory.
+- **Force-overwrite native modules**: Native modules (`better-sqlite3`, `sharp`, `@img/*`) are now always overwritten regardless of version match, since the tarball ships Node.js ABI binaries that must be replaced with Electron ABI binaries.
+- **Copy all `@img` packages**: The `@img` copy filter no longer skips non-platform packages like `@img/colour`, which is a required dependency of `sharp`.
+- **Asar path resolution**: `resolveModuleDir` now prefers `app.asar.unpacked` when available (for native binaries) and falls back to the asar path (for pure-JS modules), instead of blindly rewriting all paths to unpacked.
+- **Embedded server logging**: Server stdout/stderr is now written to `embedded-server.log` in the data directory's logs folder, making it possible to diagnose server errors when not running from a terminal.
+- **Renderer error forwarding**: Console warnings/errors, resource load failures, and renderer process crashes are forwarded from the renderer to the main process for diagnostics.
+
 ## 4.0.0
 
 ### Features

@@ -657,6 +657,26 @@ function createMainWindow(urlPath?: string): BrowserWindow {
     }
   });
 
+  // Forward renderer console messages to main process for diagnostics
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const levelNames = ['debug', 'info', 'warn', 'error'];
+    const levelName = levelNames[level] || 'log';
+    if (level >= 2) {
+      // Only log warnings and errors to avoid noise
+      console.log(`[Renderer:${levelName}] ${message} (${sourceId}:${line})`);
+    }
+  });
+
+  // Log resource loading failures
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[Renderer] Failed to load: ${validatedURL} — ${errorDescription} (${errorCode})`);
+  });
+
+  // Log render process crashes
+  win.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[Renderer] Process gone:', details.reason, details.exitCode);
+  });
+
   win.loadURL(url);
   win.once('ready-to-show', () => {
     win.show();

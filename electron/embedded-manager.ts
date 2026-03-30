@@ -3,6 +3,17 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { HOST_PORT, STANDALONE_CACHE_DIR } from './constants';
 
+/** Append a line to the embedded server log file in the data directory */
+function appendServerLog(dataDir: string, line: string): void {
+  try {
+    const logDir = path.join(dataDir, 'logs');
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(path.join(logDir, 'embedded-server.log'), line + '\n');
+  } catch {
+    // Best-effort logging
+  }
+}
+
 /**
  * Resolve the path to the Next.js standalone server.js.
  *
@@ -148,6 +159,7 @@ export class EmbeddedManager {
       const lines = data.toString().split('\n').filter(Boolean);
       for (const line of lines) {
         this.pushOutput(line);
+        appendServerLog(dataDir, line);
         if (onOutput) onOutput(line);
       }
     });
@@ -156,6 +168,7 @@ export class EmbeddedManager {
       const lines = data.toString().split('\n').filter(Boolean);
       for (const line of lines) {
         this.pushOutput(`[stderr] ${line}`);
+        appendServerLog(dataDir, `[stderr] ${line}`);
         if (onOutput) onOutput(line);
       }
     });

@@ -21,6 +21,25 @@ async function ensureTar() {
 }
 
 /**
+ * Recursively copy a directory using individual fs.readFileSync/writeFileSync calls.
+ * Unlike fs.cpSync, this works when the source is inside an asar archive because
+ * Electron patches readFileSync/readdirSync/statSync to read from asar transparently.
+ */
+function copyDirRecursive(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src)) {
+    const srcPath = path.join(src, entry);
+    const destPath = path.join(dest, entry);
+    const stat = fs.statSync(srcPath);
+    if (stat.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.writeFileSync(destPath, fs.readFileSync(srcPath));
+    }
+  }
+}
+
+/**
  * Manages downloading, caching, and extracting the Quilltap standalone
  * server tarball from GitHub Releases. Also handles symlinking native
  * modules from the Electron app's node_modules into the standalone directory.
@@ -209,7 +228,7 @@ export class StandaloneDownloadManager {
       fs.mkdirSync(standaloneNodeModules, { recursive: true });
     }
 
-    const copyModule = (name: string, sourceDir: string | null): void => {
+    const copyModule = (name: string, sourceDir: string | null, forceOverwrite = false): void => {
       if (!sourceDir) return;
       const targetPath = path.join(standaloneNodeModules, name);
 
@@ -223,13 +242,15 @@ export class StandaloneDownloadManager {
       }
 
       if (targetExists) {
-        // If already copied with matching version, skip
-        try {
-          const srcPkg = JSON.parse(fs.readFileSync(path.join(sourceDir, 'package.json'), 'utf-8'));
-          const dstPkg = JSON.parse(fs.readFileSync(path.join(targetPath, 'package.json'), 'utf-8'));
-          if (srcPkg.version === dstPkg.version) return;
-        } catch {
-          // Can't compare — re-copy
+        if (!forceOverwrite) {
+          // For pure-JS modules, skip if version matches
+          try {
+            const srcPkg = JSON.parse(fs.readFileSync(path.join(sourceDir, 'package.json'), 'utf-8'));
+            const dstPkg = JSON.parse(fs.readFileSync(path.join(targetPath, 'package.json'), 'utf-8'));
+            if (srcPkg.version === dstPkg.version) return;
+          } catch {
+            // Can't compare — re-copy
+          }
         }
         fs.rmSync(targetPath, { recursive: true, force: true });
       }
@@ -241,7 +262,7 @@ export class StandaloneDownloadManager {
       }
 
       try {
-        fs.cpSync(sourceDir, targetPath, { recursive: true });
+        copyDirRecursive(sourceDir, targetPath);
         console.log(`[StandaloneDownloadManager] Copied ${name}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -253,21 +274,23 @@ export class StandaloneDownloadManager {
     // imports it via npm alias)
     const betterSqlite3Dir = this.resolveModuleDir('better-sqlite3-multiple-ciphers')
                           || this.resolveModuleDir('better-sqlite3');
-    copyModule('better-sqlite3', betterSqlite3Dir);
+    console.log(`[StandaloneDownloadManager] better-sqlite3 resolved to: ${betterSqlite3Dir ?? 'null'}`);
+    copyModule('better-sqlite3', betterSqlite3Dir, true);
 
-    // Copy sharp
+    // Copy sharp (contains native bindings)
     const sharpDir = this.resolveModuleDir('sharp');
-    copyModule('sharp', sharpDir);
+    console.log(`[StandaloneDownloadManager] sharp resolved to: ${sharpDir ?? 'null'}`);
+    copyModule('sharp', sharpDir, true);
 
-    // Copy sharp's @img platform packages
+    // Copy all @img packages (platform-specific sharp binaries + shared deps like @img/colour)
     if (sharpDir) {
       const sharpParent = path.dirname(sharpDir);
       const imgDir = path.join(sharpParent, '@img');
       if (fs.existsSync(imgDir)) {
         try {
-          const imgPackages = fs.readdirSync(imgDir).filter(n => n.startsWith('sharp-'));
+          const imgPackages = fs.readdirSync(imgDir);
           for (const pkg of imgPackages) {
-            copyModule(`@img/${pkg}`, path.join(imgDir, pkg));
+            copyModule(`@img/${pkg}`, path.join(imgDir, pkg), true);
           }
         } catch {
           // Non-fatal
@@ -280,18 +303,33 @@ export class StandaloneDownloadManager {
 
   /**
    * Resolve a module's directory from the Electron app's node_modules.
-   * In packaged builds, native modules live in app.asar.unpacked/ rather than
-   * inside the asar archive, so we rewrite the path accordingly.
+   *
+   * In packaged builds, require.resolve returns paths through app.asar
+   * (virtual filesystem). Electron's patched fs module can read from asar
+   * transparently, so we use the asar path directly for copying.
+   *
+   * For modules with native .node binaries, electron-builder extracts them
+   * to app.asar.unpacked/. We prefer the unpacked path when it exists
+   * (it has the real native binaries), falling back to the asar path
+   * (which works for pure-JS modules via Electron's fs patching).
    */
   private resolveModuleDir(moduleName: string): string | null {
     try {
       const pkgJson = require.resolve(moduleName + '/package.json');
       let dir = path.dirname(pkgJson);
-      // In packaged Electron apps, require.resolve returns a path through
-      // app.asar (virtual filesystem), but native .node binaries are extracted
-      // to app.asar.unpacked/. The standalone server runs as plain Node.js
-      // (ELECTRON_RUN_AS_NODE=1) and can't read from the asar archive.
-      dir = dir.replace(/app\.asar([\/\\])/, 'app.asar.unpacked$1');
+
+      // In packaged builds, check if an unpacked version exists (native modules)
+      if (dir.includes('app.asar' + path.sep)) {
+        const unpackedDir = dir.replace(/app\.asar([\/\\])/, 'app.asar.unpacked$1');
+        try {
+          fs.accessSync(path.join(unpackedDir, 'package.json'));
+          return unpackedDir;
+        } catch {
+          // No unpacked version — use asar path (Electron fs can read it for copying)
+          return dir;
+        }
+      }
+
       return dir;
     } catch {
       return null;
