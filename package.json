@@ -1,6 +1,6 @@
 {
   "name": "quilltap-shell",
-  "version": "1.0.0",
+  "version": "4.0.0",
   "description": "Electron desktop shell for the Quilltap server",
   "main": "dist-electron/main.js",
   "private": true,
@@ -18,12 +18,14 @@
   },
   "scripts": {
     "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:rebuild-native": "npx tsx scripts/rebuild-native-modules.ts",
     "electron:dev": "npm run electron:compile && cross-env ELECTRON_DEV=1 electron dist-electron/main.js",
-    "electron:build:mac": "npm run electron:compile && electron-builder --mac",
-    "electron:build:mac:dev": "npm run electron:compile && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac -c.mac.identity=null",
-    "electron:build:win": "npm run electron:compile && electron-builder --win",
-    "electron:build:linux": "npm run electron:compile && electron-builder --linux",
-    "typecheck": "tsc -p electron/tsconfig.json --noEmit"
+    "electron:build:mac": "npm run electron:compile && npm run electron:rebuild-native && electron-builder --mac",
+    "electron:build:mac:dev": "npm run electron:compile && npm run electron:rebuild-native && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac -c.mac.identity=null",
+    "electron:build:win": "npm run electron:compile && npm run electron:rebuild-native && electron-builder --win",
+    "electron:build:linux": "npm run electron:compile && npm run electron:rebuild-native && electron-builder --linux",
+    "typecheck": "tsc -p electron/tsconfig.json --noEmit",
+    "clean:server-cache": "npx tsx scripts/clean-server-cache.ts"
   },
   "dependencies": {
     "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.8.0",
@@ -33,6 +35,7 @@
   },
   "devDependencies": {
     "@electron/notarize": "^3.1.1",
+    "@electron/rebuild": "^4.0.3",
     "cross-env": "^7.0.3",
     "electron": "^40.8.5",
     "electron-builder": "^26.8.1",

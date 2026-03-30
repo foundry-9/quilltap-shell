@@ -3,7 +3,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { DownloadProgress } from './types';
+import { DownloadProgress, VersionOption } from './types';
 import {
   STANDALONE_CACHE_DIR,
   GITHUB_REPO,
@@ -97,6 +97,39 @@ export class StandaloneDownloadManager {
   }
 
   /**
+   * Fetch available server versions from GitHub Releases, filtered to >= minVersion.
+   * Returns VersionOption[] sorted newest-first. Includes both stable and prerelease.
+   */
+  async getAvailableVersions(minVersion: string = '3.2.0'): Promise<VersionOption[]> {
+    const releases = await this.githubApiGet(`/repos/${GITHUB_REPO}/releases?per_page=100`);
+
+    const minParts = minVersion.split('.').map(Number);
+
+    return (releases as Array<{ tag_name: string; prerelease: boolean; assets: Array<{ name: string }> }>)
+      .filter((r) => {
+        // Must have a standalone tarball asset
+        const hasStandalone = r.assets.some((a) => a.name.startsWith('quilltap-standalone-'));
+        if (!hasStandalone) return false;
+
+        // Filter by minimum version (compare only major.minor.patch, ignore prerelease suffix)
+        const baseTag = r.tag_name.replace(/^v/, '').split('-')[0];
+        const parts = baseTag.split('.').map(Number);
+        for (let i = 0; i < 3; i++) {
+          const a = parts[i] || 0;
+          const b = minParts[i] || 0;
+          if (a > b) return true;
+          if (a < b) return false;
+        }
+        return true; // equal
+      })
+      .map((r): VersionOption => ({
+        tag: r.tag_name,
+        label: r.prerelease ? `${r.tag_name} (pre-release)` : r.tag_name,
+        prerelease: r.prerelease,
+      }));
+  }
+
+  /**
    * Ensure the standalone tarball is downloaded and extracted.
    * Returns the path to the cache directory.
    */
@@ -160,9 +193,14 @@ export class StandaloneDownloadManager {
   }
 
   /**
-   * Symlink native modules from the Electron app's node_modules into the
-   * standalone directory's node_modules, so the server can find them via
-   * standard Node.js module resolution.
+   * Copy native modules from the Electron app into the standalone directory.
+   *
+   * The standalone tarball ships without native modules (they're platform-
+   * specific). The Electron app bundles them in app.asar.unpacked/, rebuilt
+   * at build time against Electron's Node ABI by rebuild-native-modules.ts.
+   *
+   * We copy (not symlink) because symlinked modules resolve their transitive
+   * dependencies relative to the symlink target, where they aren't available.
    */
   linkNativeModules(): void {
     const standaloneNodeModules = path.join(this.cacheDir, 'node_modules');
@@ -171,20 +209,27 @@ export class StandaloneDownloadManager {
       fs.mkdirSync(standaloneNodeModules, { recursive: true });
     }
 
-    const symlinkType: 'junction' | 'dir' = process.platform === 'win32' ? 'junction' : 'dir';
-
-    const linkModule = (name: string, sourceDir: string | null): void => {
+    const copyModule = (name: string, sourceDir: string | null): void => {
       if (!sourceDir) return;
       const targetPath = path.join(standaloneNodeModules, name);
 
-      // If already exists and points to the right place, skip
-      if (fs.existsSync(targetPath)) {
+      // Check if something already exists (including broken symlinks)
+      let targetExists = false;
+      try {
+        fs.lstatSync(targetPath);
+        targetExists = true;
+      } catch {
+        // Nothing at this path
+      }
+
+      if (targetExists) {
+        // If already copied with matching version, skip
         try {
-          const existing = fs.realpathSync(targetPath);
-          const source = fs.realpathSync(sourceDir);
-          if (existing === source) return;
+          const srcPkg = JSON.parse(fs.readFileSync(path.join(sourceDir, 'package.json'), 'utf-8'));
+          const dstPkg = JSON.parse(fs.readFileSync(path.join(targetPath, 'package.json'), 'utf-8'));
+          if (srcPkg.version === dstPkg.version) return;
         } catch {
-          // If we can't resolve, remove and re-link
+          // Can't compare — re-copy
         }
         fs.rmSync(targetPath, { recursive: true, force: true });
       }
@@ -196,33 +241,33 @@ export class StandaloneDownloadManager {
       }
 
       try {
-        fs.symlinkSync(sourceDir, targetPath, symlinkType);
-        console.log(`[StandaloneDownloadManager] Linked ${name}`);
+        fs.cpSync(sourceDir, targetPath, { recursive: true });
+        console.log(`[StandaloneDownloadManager] Copied ${name}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.warn(`[StandaloneDownloadManager] Could not symlink ${name}: ${msg}`);
+        console.warn(`[StandaloneDownloadManager] Could not copy ${name}: ${msg}`);
       }
     };
 
-    // Link better-sqlite3-multiple-ciphers as 'better-sqlite3' (the server
+    // Copy better-sqlite3-multiple-ciphers as 'better-sqlite3' (the server
     // imports it via npm alias)
     const betterSqlite3Dir = this.resolveModuleDir('better-sqlite3-multiple-ciphers')
                           || this.resolveModuleDir('better-sqlite3');
-    linkModule('better-sqlite3', betterSqlite3Dir);
+    copyModule('better-sqlite3', betterSqlite3Dir);
 
-    // Link sharp
+    // Copy sharp
     const sharpDir = this.resolveModuleDir('sharp');
-    linkModule('sharp', sharpDir);
+    copyModule('sharp', sharpDir);
 
-    // Link sharp's @img platform packages
+    // Copy sharp's @img platform packages
     if (sharpDir) {
       const sharpParent = path.dirname(sharpDir);
       const imgDir = path.join(sharpParent, '@img');
       if (fs.existsSync(imgDir)) {
         try {
-          const imgPackages = fs.readdirSync(imgDir).filter(name => name.startsWith('sharp-'));
+          const imgPackages = fs.readdirSync(imgDir).filter(n => n.startsWith('sharp-'));
           for (const pkg of imgPackages) {
-            linkModule(`@img/${pkg}`, path.join(imgDir, pkg));
+            copyModule(`@img/${pkg}`, path.join(imgDir, pkg));
           }
         } catch {
           // Non-fatal
@@ -233,11 +278,21 @@ export class StandaloneDownloadManager {
 
   // --- Private helpers ---
 
-  /** Resolve a module's directory from the Electron app's node_modules */
+  /**
+   * Resolve a module's directory from the Electron app's node_modules.
+   * In packaged builds, native modules live in app.asar.unpacked/ rather than
+   * inside the asar archive, so we rewrite the path accordingly.
+   */
   private resolveModuleDir(moduleName: string): string | null {
     try {
       const pkgJson = require.resolve(moduleName + '/package.json');
-      return path.dirname(pkgJson);
+      let dir = path.dirname(pkgJson);
+      // In packaged Electron apps, require.resolve returns a path through
+      // app.asar (virtual filesystem), but native .node binaries are extracted
+      // to app.asar.unpacked/. The standalone server runs as plain Node.js
+      // (ELECTRON_RUN_AS_NODE=1) and can't read from the asar archive.
+      dir = dir.replace(/app\.asar([\/\\])/, 'app.asar.unpacked$1');
+      return dir;
     } catch {
       return null;
     }

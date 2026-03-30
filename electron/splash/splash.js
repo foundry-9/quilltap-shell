@@ -28,6 +28,10 @@ const runtimeVMBtn = document.getElementById('runtimeVM');
 const runtimeEmbeddedBtn = document.getElementById('runtimeEmbedded');
 const vmLabelEl = document.getElementById('vmLabel');
 
+// Version selector elements
+const versionSection = document.getElementById('versionSection');
+const versionSelect = document.getElementById('versionSelect');
+
 // Rename elements
 const renameOverlay = document.getElementById('renameOverlay');
 const renameInput = document.getElementById('renameInput');
@@ -56,6 +60,12 @@ var currentSizes = {};
 
 /** Current runtime mode */
 var currentRuntimeMode = 'vm';
+
+/** Last known available versions (preserved across runtime mode toggles) */
+var lastAvailableVersions = [];
+
+/** Last known server version setting */
+var lastServerVersion = 'latest';
 
 /** Directory pending deletion (for the confirmation dialog) */
 var pendingDeleteDir = '';
@@ -146,6 +156,80 @@ function updateRuntimeButtons() {
   } else {
     runtimeVMBtn.classList.add('selected');
   }
+}
+
+/** Update the version selector visibility and contents */
+function updateVersionSelector(versions, serverVersion) {
+  // Only show for embedded mode
+  if (currentRuntimeMode !== 'embedded') {
+    versionSection.style.display = 'none';
+    return;
+  }
+  versionSection.style.display = '';
+
+  // Preserve state across calls that don't provide new data
+  if (versions && versions.length > 0) lastAvailableVersions = versions;
+  if (serverVersion) lastServerVersion = serverVersion;
+  versions = lastAvailableVersions;
+
+  // Remember current selection
+  var currentValue = lastServerVersion || versionSelect.value || 'latest';
+
+  // Rebuild options: keep the two meta-options, then add specific versions
+  versionSelect.innerHTML = '';
+
+  var latestOpt = document.createElement('option');
+  latestOpt.value = 'latest';
+  latestOpt.textContent = 'Latest Release';
+  versionSelect.appendChild(latestOpt);
+
+  var latestDevOpt = document.createElement('option');
+  latestDevOpt.value = 'latest-dev';
+  latestDevOpt.textContent = 'Latest Dev';
+  versionSelect.appendChild(latestDevOpt);
+
+  if (versions && versions.length > 0) {
+    var stableGroup = document.createElement('optgroup');
+    stableGroup.label = 'Stable Releases';
+    var devGroup = document.createElement('optgroup');
+    devGroup.label = 'Dev Releases';
+
+    var hasStable = false;
+    var hasDev = false;
+
+    versions.forEach(function(v) {
+      var opt = document.createElement('option');
+      opt.value = v.tag;
+      opt.textContent = v.label;
+      if (v.prerelease) {
+        devGroup.appendChild(opt);
+        hasDev = true;
+      } else {
+        stableGroup.appendChild(opt);
+        hasStable = true;
+      }
+    });
+
+    if (hasStable) versionSelect.appendChild(stableGroup);
+    if (hasDev) versionSelect.appendChild(devGroup);
+  }
+
+  // Restore selection — if the saved version isn't in the list, add it
+  var found = false;
+  for (var i = 0; i < versionSelect.options.length; i++) {
+    if (versionSelect.options[i].value === currentValue) {
+      found = true;
+      break;
+    }
+  }
+  if (!found && currentValue !== 'latest' && currentValue !== 'latest-dev') {
+    var customOpt = document.createElement('option');
+    customOpt.value = currentValue;
+    customOpt.textContent = currentValue + ' (saved)';
+    versionSelect.appendChild(customOpt);
+  }
+
+  versionSelect.value = currentValue;
 }
 
 /** Show the delete confirmation dialog */
@@ -389,6 +473,9 @@ window.quilltap.onDirectories(function(data) {
     vmLabelEl.textContent = data.vmLabel;
   }
 
+  // Update version selector
+  updateVersionSelector(data.availableVersions, data.serverVersion);
+
   // On Linux, hide the VM option — there is no Lima/WSL2 equivalent
   if (data.platform === 'linux') {
     runtimeVMBtn.style.display = 'none';
@@ -443,6 +530,7 @@ runtimeDockerBtn.addEventListener('click', function() {
   if (runtimeDockerBtn.disabled) return;
   currentRuntimeMode = 'docker';
   updateRuntimeButtons();
+  updateVersionSelector(null, null);
   window.quilltap.setRuntimeMode('docker');
 });
 
@@ -450,6 +538,7 @@ runtimeDockerBtn.addEventListener('click', function() {
 runtimeVMBtn.addEventListener('click', function() {
   currentRuntimeMode = 'vm';
   updateRuntimeButtons();
+  updateVersionSelector(null, null);
   window.quilltap.setRuntimeMode('vm');
 });
 
@@ -458,7 +547,13 @@ runtimeEmbeddedBtn.addEventListener('click', function() {
   if (runtimeEmbeddedBtn.disabled) return;
   currentRuntimeMode = 'embedded';
   updateRuntimeButtons();
+  updateVersionSelector(null, null);
   window.quilltap.setRuntimeMode('embedded');
+});
+
+/** Server version selector */
+versionSelect.addEventListener('change', function() {
+  window.quilltap.setServerVersion(versionSelect.value);
 });
 
 /** Delete confirmation: config only */

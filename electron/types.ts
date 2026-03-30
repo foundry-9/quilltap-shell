@@ -63,6 +63,10 @@ export interface DirectoryInfo {
   vmLabel: string;
   /** Host platform (darwin, win32, linux) */
   platform: string;
+  /** Current server version setting ('latest', 'latest-dev', or a specific tag) */
+  serverVersion: string;
+  /** Available server versions fetched from GitHub (may be empty if offline) */
+  availableVersions: VersionOption[];
 }
 
 /** Status of the VM (Lima on macOS, WSL2 on Windows) */
@@ -82,6 +86,16 @@ export interface DownloadProgress {
   totalBytes: number;
   percent: number;
   speed: string;
+}
+
+/** A selectable server version option */
+export interface VersionOption {
+  /** Version tag (e.g. '3.2.5' or '3.3.0-dev.1') */
+  tag: string;
+  /** Human-readable label (e.g. 'v3.2.5' or 'v3.3.0-dev.1 (pre-release)') */
+  label: string;
+  /** Whether this is a pre-release / dev build */
+  prerelease: boolean;
 }
 
 /** Health endpoint polling status */

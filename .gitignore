@@ -141,3 +141,4 @@ vite.config.ts.timestamp-*
 .claude
 .vscode
 dist-electron
+.DS_Store

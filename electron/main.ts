@@ -24,7 +24,7 @@ import { EmbeddedManager } from './embedded-manager';
 import { DownloadManager } from './download-manager';
 import { StandaloneDownloadManager } from './standalone-download-manager';
 import { HealthChecker } from './health-checker';
-import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel, WindowBounds } from './types';
+import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel, WindowBounds, VersionOption } from './types';
 import { AppSettings, loadSettings, saveSettings, saveWindowBounds, getWindowBounds, defaultNameForPath } from './settings';
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
@@ -77,6 +77,7 @@ let isQuitting = false;
 let appSettings: AppSettings;
 let dockerAvailable = false;
 const embeddedAvailable = true; // Always available — uses Electron's own Node.js
+let cachedAvailableVersions: VersionOption[] | null = null;
 let workspaceWatcher: WorkspaceWatcher | null = null;
 
 /** Whether we're in the auto-start countdown (can be interrupted) */
@@ -124,6 +125,8 @@ function sendDirectoryInfo(): void {
     embeddedAvailable,
     vmLabel: getVMLabel(),
     platform: process.platform,
+    serverVersion: appSettings.serverVersion || 'latest',
+    availableVersions: cachedAvailableVersions || [],
   };
 
   // Phase 1: Send immediately with empty sizes so UI renders fast
@@ -137,6 +140,19 @@ function sendDirectoryInfo(): void {
       splashWindow.webContents.send('splash:directories', updated);
     }
   });
+
+  // Phase 3: Fetch available versions if not yet cached
+  if (!cachedAvailableVersions) {
+    standaloneManager.getAvailableVersions('3.2.0').then((versions) => {
+      cachedAvailableVersions = versions;
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        const updated: DirectoryInfo = { ...common, sizes: {}, availableVersions: versions };
+        splashWindow.webContents.send('splash:directories', updated);
+      }
+    }).catch((err) => {
+      console.warn('[Main] Could not fetch available versions:', err);
+    });
+  }
 }
 
 /** Calculate disk sizes for all known data directories */
@@ -1313,11 +1329,29 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
   });
 
   let startError: string | null = null;
+  let serverFatalError: string | null = null;
 
   embeddedManager.startServer(
     dataDir,
     (line) => {
       console.log('[EmbeddedManager] output:', line);
+
+      // Detect fatal/blocking errors from structured JSON log lines.
+      // These indicate the server cannot start and will never become healthy.
+      if (line.includes('"level":"error"') && (
+        line.includes('Fatal error') ||
+        line.includes('Version guard BLOCKED') ||
+        line.includes('cannot run migrations') ||
+        line.includes('cannot start server')
+      )) {
+        try {
+          const parsed = JSON.parse(line.startsWith('[stderr] ') ? line.slice(9) : line);
+          serverFatalError = parsed.message + (parsed.context?.error ? `: ${parsed.context.error}` : '');
+        } catch {
+          serverFatalError = line;
+        }
+      }
+
       sendSplashUpdate({
         phase: 'starting-server',
         message: 'Starting Quilltap server...',
@@ -1351,6 +1385,19 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
     return;
   }
 
+  // Check for fatal error detected during the startup wait
+  if (serverFatalError) {
+    const recentLines = embeddedManager.getRecentOutput(10);
+    const details = recentLines.length > 0 ? recentLines.join('\n') : '';
+    sendSplashError(
+      `Server reported a fatal error during initialization:\n\n${serverFatalError}` +
+      (details ? `\n\nRecent output:\n${details}` : ''),
+      true,
+    );
+    embeddedManager.stopServer();
+    return;
+  }
+
   // Step 3: Wait for health
   sendSplashUpdate({
     phase: 'waiting-health',
@@ -1363,7 +1410,7 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
       message: `Waiting for server... (attempt ${s.attempts})`,
       detail: s.error || '',
     });
-  });
+  }, () => serverFatalError);
 
   if (healthStatus.status === 'locked') {
     sendSplashUpdate({ phase: 'ready', message: 'Database locked — passphrase required' });
@@ -1380,12 +1427,16 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
     mainWindow = createMainWindow();
     markStartupSuccess();
   } else {
-    sendSplashError(
-      `Server did not become healthy after ${healthStatus.attempts} attempts.\n\n` +
-      'Check the application logs for details.',
-      true
-    );
+    const errorDetail = serverFatalError
+      ? `Server reported a fatal error:\n\n${serverFatalError}`
+      : `Server did not become healthy after ${healthStatus.attempts} attempts.`;
+    const recentLines = embeddedManager.getRecentOutput(15);
+    const recentText = recentLines.length > 0
+      ? `\n\nRecent server output:\n${recentLines.join('\n')}`
+      : '\n\nCheck the application logs for details.';
+    sendSplashError(errorDetail + recentText, true);
     closeStartupLog();
+    embeddedManager.stopServer();
   }
 }
 
@@ -1462,6 +1513,8 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     embeddedAvailable,
     vmLabel: getVMLabel(),
     platform: process.platform,
+    serverVersion: appSettings.serverVersion || 'latest',
+    availableVersions: cachedAvailableVersions || [],
   };
 });
 
@@ -1500,6 +1553,13 @@ ipcMain.on('splash:set-runtime-mode', (_event, mode: string) => {
     : mode === 'embedded' ? 'embedded' : 'vm';
   console.log('[Main] Runtime mode set to:', runtimeMode);
   appSettings.runtimeMode = runtimeMode;
+  saveSettings(appSettings);
+});
+
+/** Set the server version for embedded mode */
+ipcMain.on('splash:set-server-version', (_event, version: string) => {
+  console.log('[Main] Server version set to:', version);
+  appSettings.serverVersion = version;
   saveSettings(appSettings);
 });
 

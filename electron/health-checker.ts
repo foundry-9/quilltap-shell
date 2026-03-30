@@ -22,9 +22,22 @@ export class HealthChecker {
   async waitForHealthy(
     maxAttempts: number = HEALTH_MAX_ATTEMPTS,
     intervalMs: number = HEALTH_POLL_INTERVAL_MS,
-    onProgress?: (status: HealthStatus) => void
+    onProgress?: (status: HealthStatus) => void,
+    shouldAbort?: () => string | null,
   ): Promise<HealthStatus> {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Check if caller wants to abort early (e.g. fatal error detected)
+      if (shouldAbort) {
+        const abortReason = shouldAbort();
+        if (abortReason) {
+          return {
+            status: 'unhealthy',
+            attempts: attempt,
+            error: abortReason,
+          };
+        }
+      }
+
       const status = await this.checkHealth(attempt);
 
       if (onProgress) {

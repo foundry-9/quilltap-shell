@@ -9,9 +9,11 @@ files:
   - dist-electron/**/*
   - electron/splash/**/*
   - package.json
-  # Include native module dependencies (better-sqlite3, sharp, tar, etc.)
-  # These are symlinked into the downloaded standalone at runtime
-  - node_modules/better-sqlite3-multiple-ciphers/**/*
+  # Native modules rebuilt against Electron's ABI by rebuild-native-modules.ts.
+  # Copied into the downloaded standalone server's node_modules at runtime.
+  - node_modules/better-sqlite3/**/*
+  - node_modules/bindings/**/*
+  - node_modules/file-uri-to-path/**/*
   - node_modules/sharp/**/*
   - node_modules/@img/**/*
   - node_modules/tar/**/*
