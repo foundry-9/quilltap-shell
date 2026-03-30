@@ -1,14 +1,12 @@
 # Quilltap Electron Shell Changelog
 
-## 4.1-dev
+## 4.0.1
 
 ### Features
 
 - **Version selector for all runtime modes**: The server version dropdown now appears for Docker and VM (Lima/WSL2) modes, not just embedded/direct mode. Each mode filters available versions by the assets that exist for it (standalone tarballs for embedded, rootfs tarballs for VM, all tagged releases for Docker). Switching runtime modes refreshes the version list automatically.
 - **Docker version selection**: Docker mode now pulls the user-selected version tag from `foundry9/quilltap` instead of being locked to the Electron app version. Falls back to the app version if offline.
 - **VM version selection**: VM mode now downloads the rootfs tarball for the user-selected version instead of being locked to the app version. Falls back to the app version if offline.
-
-## 4.0.1
 
 ### Fixes
 
