@@ -1,6 +1,6 @@
 # Quilltap Electron Shell Changelog
 
-## 4.1-dev
+## 4.0.8
 
 ### Features
 
