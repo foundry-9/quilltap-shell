@@ -1,5 +1,12 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.6
+
+### Fixes
+
+- **Linux .deb build failure**: Added author email to `package.json` so `electron-builder` can populate the required maintainer field for Debian packages.
+- **Lima codesign shell escaping**: Replaced `execSync` with `execFileSync` for the `codesign` call in `stage-lima.ts` so that parentheses in the signing identity (e.g. Developer ID team IDs) are not misinterpreted by `/bin/sh`.
+
 ## 4.0.5
 
 ### Features

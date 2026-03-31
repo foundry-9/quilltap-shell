@@ -10,7 +10,7 @@
  *   npx tsx scripts/stage-lima.ts
  */
 
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
@@ -104,10 +104,17 @@ try {
 // Sign limactl with Developer ID for notarization compliance
 const codesignIdentity = process.env.CODESIGN_IDENTITY || '';
 if (codesignIdentity) {
-  run(
-    `codesign --force --sign "${codesignIdentity}" --options runtime --timestamp "${join(DEST, 'bin', 'limactl')}"`,
-    'Signing limactl with Developer ID'
-  );
+  console.log('> Signing limactl with Developer ID');
+  try {
+    execFileSync('codesign', [
+      '--force', '--sign', codesignIdentity,
+      '--options', 'runtime', '--timestamp',
+      join(DEST, 'bin', 'limactl'),
+    ], { stdio: 'inherit' });
+  } catch {
+    console.error('Failed: Signing limactl with Developer ID');
+    process.exit(1);
+  }
   console.log('limactl signed.');
 } else {
   console.log('Skipping limactl signing: CODESIGN_IDENTITY not set');
