@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.4
+
+### Features
+
+- **Release workflow**: Added GitHub Actions workflow that builds and signs the Electron shell for macOS (code signing + Apple notarization), Windows (Azure Trusted Signing), and Linux on semver tag push. Creates a GitHub Release with DMG, NSIS installer, AppImage, and deb artifacts.
+
 ## 4.0.3
 
 ### Features
