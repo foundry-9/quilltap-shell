@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.5
+
+### Features
+
+- **Release tagging script**: Added `scripts/tag-release.sh` which reads the version from `package.json`, creates an annotated git tag, and pushes it to origin. Includes safety checks for existing tags and dirty working trees.
+
 ## 4.0.4
 
 ### Features
