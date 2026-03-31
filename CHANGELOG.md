@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.7
+
+### Fixes
+
+- **Lima codesign identity not found**: The `stage-lima.ts` script now verifies the signing identity exists in the keychain (via `security find-identity`) before attempting `codesign`. If `CODESIGN_IDENTITY` is set but the identity isn't available, the script warns and continues instead of failing the build outright.
+
 ## 4.0.6
 
 ### Fixes

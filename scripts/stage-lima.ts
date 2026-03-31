@@ -104,18 +104,36 @@ try {
 // Sign limactl with Developer ID for notarization compliance
 const codesignIdentity = process.env.CODESIGN_IDENTITY || '';
 if (codesignIdentity) {
-  console.log('> Signing limactl with Developer ID');
+  // Verify the signing identity is available in the keychain before attempting
+  let identityAvailable = false;
   try {
-    execFileSync('codesign', [
-      '--force', '--sign', codesignIdentity,
-      '--options', 'runtime', '--timestamp',
-      join(DEST, 'bin', 'limactl'),
-    ], { stdio: 'inherit' });
+    const identities = execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], {
+      encoding: 'utf8',
+    });
+    identityAvailable = identities.includes(codesignIdentity);
   } catch {
-    console.error('Failed: Signing limactl with Developer ID');
-    process.exit(1);
+    // security command failed — keychain may not be set up
   }
-  console.log('limactl signed.');
+
+  if (identityAvailable) {
+    console.log('> Signing limactl with Developer ID');
+    try {
+      execFileSync('codesign', [
+        '--force', '--sign', codesignIdentity,
+        '--options', 'runtime', '--timestamp',
+        join(DEST, 'bin', 'limactl'),
+      ], { stdio: 'inherit' });
+    } catch {
+      console.error('Failed: Signing limactl with Developer ID');
+      process.exit(1);
+    }
+    console.log('limactl signed.');
+  } else {
+    console.warn(
+      'WARNING: CODESIGN_IDENTITY is set but the identity was not found in any keychain. ' +
+      'Skipping limactl signing. The resulting binary will not be notarizable.'
+    );
+  }
 } else {
   console.log('Skipping limactl signing: CODESIGN_IDENTITY not set');
 }
