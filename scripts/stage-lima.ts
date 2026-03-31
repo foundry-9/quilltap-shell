@@ -101,19 +101,24 @@ try {
   }
 }
 
-// Sign limactl with Developer ID for notarization compliance
+// Sign limactl with Developer ID for notarization compliance.
+// Signing is best-effort: electron-builder handles final app signing via
+// CSC_LINK / CSC_NAME, so a failure here should not block staging.
 const codesignIdentity = process.env.CODESIGN_IDENTITY || '';
 if (codesignIdentity) {
-  // Verify the signing identity is available in the keychain before attempting
-  let identityAvailable = false;
+  let signed = false;
+
+  // List available identities so we can diagnose mismatches
+  let identityList = '';
   try {
-    const identities = execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], {
+    identityList = execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], {
       encoding: 'utf8',
     });
-    identityAvailable = identities.includes(codesignIdentity);
   } catch {
-    // security command failed — keychain may not be set up
+    console.warn('WARNING: Could not query codesigning identities from keychain');
   }
+
+  const identityAvailable = identityList.includes(codesignIdentity);
 
   if (identityAvailable) {
     console.log('> Signing limactl with Developer ID');
@@ -123,16 +128,23 @@ if (codesignIdentity) {
         '--options', 'runtime', '--timestamp',
         join(DEST, 'bin', 'limactl'),
       ], { stdio: 'inherit' });
+      signed = true;
+      console.log('limactl signed.');
     } catch {
-      console.error('Failed: Signing limactl with Developer ID');
-      process.exit(1);
+      console.warn(
+        'WARNING: codesign failed despite identity being listed in keychain. ' +
+        'This may be a keychain ACL issue. Continuing without signing.'
+      );
     }
-    console.log('limactl signed.');
   } else {
     console.warn(
-      'WARNING: CODESIGN_IDENTITY is set but the identity was not found in any keychain. ' +
-      'Skipping limactl signing. The resulting binary will not be notarizable.'
+      'WARNING: CODESIGN_IDENTITY is set but was not found in any keychain. ' +
+      'Available identities:\n' + (identityList || '  (none)'),
     );
+  }
+
+  if (!signed) {
+    console.warn('limactl was NOT signed — the resulting binary may not be notarizable.');
   }
 } else {
   console.log('Skipping limactl signing: CODESIGN_IDENTITY not set');

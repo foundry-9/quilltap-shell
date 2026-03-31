@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- **Lima codesign identity not found**: The `stage-lima.ts` script now verifies the signing identity exists in the keychain (via `security find-identity`) before attempting `codesign`. If `CODESIGN_IDENTITY` is set but the identity isn't available, the script warns and continues instead of failing the build outright.
+- **Lima codesign no longer blocks staging**: The `stage-lima.ts` codesign step is now best-effort. If the signing identity is listed in the keychain but `codesign` still fails (e.g. due to keychain ACL issues on CI runners), the script warns and continues instead of aborting. Diagnostic output now shows available identities on mismatch.
 
 ## 4.0.6
 
