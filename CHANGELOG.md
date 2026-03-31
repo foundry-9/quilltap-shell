@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1-dev
+
+### Features
+
+- **Copy image to clipboard**: Added `copyImageToClipboard(dataUrl)` to the shell bridge API. The server can now copy generated images to the system clipboard via `window.quilltap.copyImageToClipboard()`. Backed by a new `app:copy-image-to-clipboard` IPC handler using Electron's `nativeImage` and `clipboard` modules.
+
 ## 4.0.7
 
 ### Fixes

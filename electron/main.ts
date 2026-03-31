@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -1814,6 +1814,12 @@ ipcMain.handle('app:download-url', async (_event, url: string) => {
   const fullUrl = url.startsWith('/') ? `${baseUrl}${url}` : url;
   console.log(`[Main] Triggering download for: ${fullUrl}`);
   mainWindow.webContents.downloadURL(fullUrl);
+});
+
+ipcMain.handle('app:copy-image-to-clipboard', (_event, dataUrl: string) => {
+  const image = nativeImage.createFromDataURL(dataUrl);
+  clipboard.writeImage(image);
+  return true;
 });
 
 /** Create a small, frameless window showing a shutdown message */

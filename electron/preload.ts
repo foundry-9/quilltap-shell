@@ -54,6 +54,11 @@ contextBridge.exposeInMainWorld('quilltap', {
   openPath: (dirPath: string): Promise<void> =>
     ipcRenderer.invoke('app:open-path', dirPath),
 
+  // --- Clipboard ---
+  /** Copy an image (as a data URL) to the system clipboard */
+  copyImageToClipboard: (dataUrl: string): Promise<boolean> =>
+    ipcRenderer.invoke('app:copy-image-to-clipboard', dataUrl),
+
   // --- Workspace ---
   /** Explicitly apply quarantine markers to a workspace file */
   applyQuarantine: (filePath: string): Promise<boolean> =>
