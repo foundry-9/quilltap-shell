@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.12
+
+### Fixes
+
+- **Linux release build failure**: Added missing `GH_TOKEN` environment variable to the Linux electron-builder step in the GitHub Actions release workflow. The macOS and Windows builds already had it, but the Linux build would fail because electron-builder v26 auto-publishes when it detects a git tag and requires the token.
+
 ## 4.0.11
 
 ### Features

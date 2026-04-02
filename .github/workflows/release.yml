@@ -200,6 +200,8 @@ jobs:
         run: npx tsc -p electron/tsconfig.json
 
       - name: Package with electron-builder
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         run: npx electron-builder --linux
 
       - name: Upload Linux artifacts
