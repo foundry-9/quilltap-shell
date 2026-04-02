@@ -67,6 +67,8 @@ export interface DirectoryInfo {
   serverVersion: string;
   /** Available server versions fetched from GitHub (may be empty if offline) */
   availableVersions: VersionOption[];
+  /** Present when the pinned server version is older than the latest in the same channel */
+  upgradeAvailable?: { from: string; to: string; toLabel: string };
 }
 
 /** Status of the VM (Lima on macOS, WSL2 on Windows) */

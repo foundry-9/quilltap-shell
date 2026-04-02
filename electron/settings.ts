@@ -16,6 +16,8 @@ export interface AppSettings {
   runtimeMode: RuntimeMode;
   /** Server version to download: 'latest', 'latest-dev', or a specific semver tag */
   serverVersion: string;
+  /** Version tag the user declined to upgrade to (suppresses the prompt until a newer version appears) */
+  declinedServerVersion: string;
 }
 
 /** Derive a human-readable name for a data directory path */
@@ -32,6 +34,7 @@ function defaultSettings(): AppSettings {
     autoStart: false,
     runtimeMode: process.platform === 'linux' ? 'docker' : 'vm',
     serverVersion: 'latest',
+    declinedServerVersion: '',
   };
 }
 
@@ -84,6 +87,7 @@ export function loadSettings(): AppSettings {
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
         runtimeMode,
         serverVersion: typeof parsed.serverVersion === 'string' ? parsed.serverVersion : defaults.serverVersion,
+        declinedServerVersion: typeof parsed.declinedServerVersion === 'string' ? parsed.declinedServerVersion : defaults.declinedServerVersion,
       };
     }
   } catch (err) {

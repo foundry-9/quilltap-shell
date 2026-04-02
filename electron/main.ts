@@ -113,11 +113,80 @@ function getVMLabel(): string {
   return process.platform === 'win32' ? 'WSL2' : 'Lima';
 }
 
+/**
+ * Compare two version tags (e.g. '4.0.8', '4.1.0-dev.1').
+ * Returns negative if a < b, 0 if equal, positive if a > b.
+ * Compares major.minor.patch numerically, then pre-release suffixes lexicographically
+ * (a version without a suffix is considered newer than one with a suffix at the same base).
+ */
+function compareVersions(a: string, b: string): number {
+  const stripV = (v: string) => v.replace(/^v/, '');
+  const [aBase, aSuffix] = stripV(a).split('-', 2) as [string, string | undefined];
+  const [bBase, bSuffix] = stripV(b).split('-', 2) as [string, string | undefined];
+
+  const aParts = aBase.split('.').map(Number);
+  const bParts = bBase.split('.').map(Number);
+
+  for (let i = 0; i < 3; i++) {
+    const diff = (aParts[i] || 0) - (bParts[i] || 0);
+    if (diff !== 0) return diff;
+  }
+
+  // Same base version: no suffix > suffix (e.g. 4.1.0 > 4.1.0-dev.1)
+  if (!aSuffix && bSuffix) return 1;
+  if (aSuffix && !bSuffix) return -1;
+  if (aSuffix && bSuffix) return aSuffix.localeCompare(bSuffix);
+  return 0;
+}
+
+/**
+ * Check if the user's pinned server version has a newer release available.
+ * - Stable users only see newer stable releases.
+ * - Dev users see the newest version across both channels (a newer stable
+ *   release is the natural upgrade path out of a dev build).
+ * Returns upgrade info or undefined.
+ */
+function checkForUpgrade(
+  serverVersion: string,
+  versions: VersionOption[],
+  declinedVersion: string,
+): DirectoryInfo['upgradeAvailable'] {
+  // Only applies to specific pinned versions, not 'latest' / 'latest-dev'
+  if (!serverVersion || serverVersion === 'latest' || serverVersion === 'latest-dev') {
+    return undefined;
+  }
+
+  // Determine if the current pinned version is a prerelease
+  const currentInList = versions.find((v) => v.tag === serverVersion);
+  const isCurrentDev = currentInList
+    ? currentInList.prerelease
+    : /[-]/.test(serverVersion.replace(/^v/, '').replace(/^\d+\.\d+\.\d+/, ''));
+
+  // Find the best upgrade candidate:
+  // - Stable users: latest stable only
+  // - Dev users: whichever is newest across stable and dev
+  let latest: VersionOption | undefined;
+  if (isCurrentDev) {
+    // Offer the single newest version regardless of channel
+    latest = versions.find((v) => compareVersions(v.tag, serverVersion) > 0);
+  } else {
+    // Stable users only see newer stable releases
+    latest = versions.find((v) => !v.prerelease && compareVersions(v.tag, serverVersion) > 0);
+  }
+
+  if (!latest) return undefined;
+
+  // Has the user already declined this specific version?
+  if (declinedVersion === latest.tag) return undefined;
+
+  return { from: serverVersion, to: latest.tag, toLabel: latest.label };
+}
+
 /** Send directory info to splash screen (two-phase: immediate with empty sizes, then async with real sizes) */
 function sendDirectoryInfo(): void {
   if (!splashWindow || splashWindow.isDestroyed()) return;
 
-  const common = {
+  const buildCommon = (versions?: VersionOption[]) => ({
     dirs: appSettings.knownDataDirs,
     lastUsed: appSettings.lastDataDir,
     autoStart: appSettings.autoStart,
@@ -127,17 +196,22 @@ function sendDirectoryInfo(): void {
     vmLabel: getVMLabel(),
     platform: process.platform,
     serverVersion: appSettings.serverVersion || 'latest',
-    availableVersions: cachedAvailableVersions || [],
-  };
+    availableVersions: versions || cachedAvailableVersions || [],
+    upgradeAvailable: checkForUpgrade(
+      appSettings.serverVersion,
+      versions || cachedAvailableVersions || [],
+      appSettings.declinedServerVersion,
+    ),
+  });
 
   // Phase 1: Send immediately with empty sizes so UI renders fast
-  const info: DirectoryInfo = { ...common, sizes: {} };
+  const info: DirectoryInfo = { ...buildCommon(), sizes: {} };
   splashWindow.webContents.send('splash:directories', info);
 
   // Phase 2: Calculate sizes async in background, send update when done
   calculateDirectorySizes().then((sizes) => {
     if (splashWindow && !splashWindow.isDestroyed()) {
-      const updated: DirectoryInfo = { ...common, sizes };
+      const updated: DirectoryInfo = { ...buildCommon(), sizes };
       splashWindow.webContents.send('splash:directories', updated);
     }
   });
@@ -147,7 +221,7 @@ function sendDirectoryInfo(): void {
     standaloneManager.getAvailableVersions('3.2.0', appSettings.runtimeMode).then((versions) => {
       cachedAvailableVersions = versions;
       if (splashWindow && !splashWindow.isDestroyed()) {
-        const updated: DirectoryInfo = { ...common, sizes: {}, availableVersions: versions };
+        const updated: DirectoryInfo = { ...buildCommon(versions), sizes: {}, availableVersions: versions };
         splashWindow.webContents.send('splash:directories', updated);
       }
     }).catch((err) => {
@@ -1645,6 +1719,22 @@ ipcMain.on('splash:set-runtime-mode', (_event, mode: string) => {
 ipcMain.on('splash:set-server-version', (_event, version: string) => {
   console.log('[Main] Server version set to:', version);
   appSettings.serverVersion = version;
+  saveSettings(appSettings);
+});
+
+/** Accept the upgrade prompt: switch to the offered version */
+ipcMain.on('splash:accept-upgrade', (_event, version: string) => {
+  console.log('[Main] User accepted upgrade to:', version);
+  appSettings.serverVersion = version;
+  appSettings.declinedServerVersion = '';
+  saveSettings(appSettings);
+  sendDirectoryInfo();
+});
+
+/** Decline the upgrade prompt: remember the declined version so we don't ask again */
+ipcMain.on('splash:decline-upgrade', (_event, version: string) => {
+  console.log('[Main] User declined upgrade to:', version);
+  appSettings.declinedServerVersion = version;
   saveSettings(appSettings);
 });
 

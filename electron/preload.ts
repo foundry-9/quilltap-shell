@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('quilltap', {
   setRuntimeMode: (mode: string) => ipcRenderer.send('splash:set-runtime-mode', mode),
   /** Set the server version to use ('latest', 'latest-dev', or a specific tag) */
   setServerVersion: (version: string) => ipcRenderer.send('splash:set-server-version', version),
+  /** Accept an upgrade prompt — switches pinned version to the offered one */
+  acceptUpgrade: (version: string) => ipcRenderer.send('splash:accept-upgrade', version),
+  /** Decline an upgrade prompt — suppresses the prompt for this version */
+  declineUpgrade: (version: string) => ipcRenderer.send('splash:decline-upgrade', version),
   /** Delete a directory with confirmation action ('config-only' or 'config-and-data') */
   deleteDirectory: (dirPath: string, action: string): Promise<boolean> =>
     ipcRenderer.invoke('splash:delete-directory', dirPath, action),

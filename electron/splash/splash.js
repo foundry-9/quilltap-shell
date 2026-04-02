@@ -32,6 +32,15 @@ const vmLabelEl = document.getElementById('vmLabel');
 const versionSection = document.getElementById('versionSection');
 const versionSelect = document.getElementById('versionSelect');
 
+// Upgrade banner elements
+const upgradeBanner = document.getElementById('upgradeBanner');
+const upgradeBannerText = document.getElementById('upgradeBannerText');
+const upgradeAcceptBtn = document.getElementById('upgradeAcceptBtn');
+const upgradeDeclineBtn = document.getElementById('upgradeDeclineBtn');
+
+/** Pending upgrade version (set when banner is shown) */
+var pendingUpgradeVersion = '';
+
 // Rename elements
 const renameOverlay = document.getElementById('renameOverlay');
 const renameInput = document.getElementById('renameInput');
@@ -472,6 +481,18 @@ window.quilltap.onDirectories(function(data) {
   // Update version selector
   updateVersionSelector(data.availableVersions, data.serverVersion);
 
+  // Show or hide upgrade banner
+  if (data.upgradeAvailable) {
+    pendingUpgradeVersion = data.upgradeAvailable.to;
+    upgradeBannerText.textContent =
+      'A newer server is available: ' + data.upgradeAvailable.toLabel +
+      ' (you are on ' + data.upgradeAvailable.from + ')';
+    upgradeBanner.classList.remove('hidden');
+  } else {
+    pendingUpgradeVersion = '';
+    upgradeBanner.classList.add('hidden');
+  }
+
   // On Linux, hide the VM option — there is no Lima/WSL2 equivalent
   if (data.platform === 'linux') {
     runtimeVMBtn.style.display = 'none';
@@ -597,6 +618,24 @@ renameSaveBtn.addEventListener('click', async function() {
 /** Rename: cancel */
 renameCancelBtn.addEventListener('click', function() {
   hideRenameDialog();
+});
+
+/** Upgrade banner: accept */
+upgradeAcceptBtn.addEventListener('click', function() {
+  if (pendingUpgradeVersion) {
+    window.quilltap.acceptUpgrade(pendingUpgradeVersion);
+    pendingUpgradeVersion = '';
+    upgradeBanner.classList.add('hidden');
+  }
+});
+
+/** Upgrade banner: decline */
+upgradeDeclineBtn.addEventListener('click', function() {
+  if (pendingUpgradeVersion) {
+    window.quilltap.declineUpgrade(pendingUpgradeVersion);
+    pendingUpgradeVersion = '';
+    upgradeBanner.classList.add('hidden');
+  }
 });
 
 /** Rename: Enter key saves, Escape cancels */

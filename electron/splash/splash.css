@@ -599,6 +599,35 @@ body {
   background: #d97706;
 }
 
+/* Upgrade banner */
+.upgrade-banner {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(147, 51, 234, 0.15));
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.upgrade-banner.hidden {
+  display: none;
+}
+
+.upgrade-banner-text {
+  flex: 1;
+  font-size: 12px;
+  color: #c8d6e5;
+  line-height: 1.4;
+}
+
+.upgrade-banner-buttons {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* Delete confirmation overlay */
 .delete-overlay {
   display: none;

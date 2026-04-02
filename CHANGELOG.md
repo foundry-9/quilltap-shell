@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.9
+
+### Features
+
+- **Server version upgrade prompt**: When the user has pinned a specific server version and a newer release is available, the splash screen now shows a banner offering to upgrade. Stable users are only offered newer stable releases; dev users are offered the newest version across both channels. Declining suppresses the prompt for that version, but a newer release will prompt again.
+
 ## 4.0.8
 
 ### Features
