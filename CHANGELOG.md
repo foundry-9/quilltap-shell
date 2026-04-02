@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.10
+
+### Fixes
+
+- **Application menu name**: Set `app.name` to "Quilltap" explicitly so the macOS application menu and About dialog show the correct name instead of "quilltap-shell" (the npm package name).
+
 ## 4.0.9
 
 ### Features

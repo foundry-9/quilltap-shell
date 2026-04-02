@@ -32,6 +32,8 @@ import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 import { initStartupLog, logStartup, closeStartupLog } from './startup-log';
 import { WorkspaceWatcher } from './workspace-watcher';
 
+app.name = 'Quilltap';
+
 const isDev = !!process.env.ELECTRON_DEV;
 
 /** Detect the host OS timezone to pass through to the backend */
