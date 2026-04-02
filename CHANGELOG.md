@@ -1,5 +1,13 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.11
+
+### Features
+
+- **Launcher auto-update**: The Quilltap Launcher now checks GitHub Releases for newer versions after the main window loads. When an update is available, a native dialog prompts the user to download and restart. Declined versions are remembered so the prompt does not reappear until a newer release is published. The update downloads with a progress indicator, gracefully stops the running server, then installs and relaunches.
+- **macOS zip target**: Added a zip build target alongside the existing DMG for macOS. The zip is used by electron-updater for in-place updates; the DMG remains available for fresh installations.
+- **Update metadata in releases**: The GitHub Actions release workflow now uploads `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` metadata files alongside installers, enabling electron-updater to discover available versions.
+
 ## 4.0.10
 
 ### Fixes

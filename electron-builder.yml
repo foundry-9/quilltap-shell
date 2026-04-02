@@ -1,4 +1,7 @@
-publish: null
+publish:
+  provider: github
+  owner: foundry-9
+  repo: quilltap-shell
 appId: com.foundry9.quilltap
 productName: Quilltap
 directories:
@@ -37,6 +40,9 @@ mac:
   notarize: false
   target:
     - target: dmg
+      arch:
+        - arm64
+    - target: zip
       arch:
         - arm64
   hardenedRuntime: true

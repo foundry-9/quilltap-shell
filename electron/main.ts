@@ -31,6 +31,7 @@ import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 import { initStartupLog, logStartup, closeStartupLog } from './startup-log';
 import { WorkspaceWatcher } from './workspace-watcher';
+import { ShellUpdater } from './shell-updater';
 
 app.name = 'Quilltap';
 
@@ -82,6 +83,7 @@ let dockerAvailable = false;
 const embeddedAvailable = true; // Always available — uses Electron's own Node.js
 let cachedAvailableVersions: VersionOption[] | null = null;
 let workspaceWatcher: WorkspaceWatcher | null = null;
+let shellUpdater: ShellUpdater;
 
 /** Whether we're in the auto-start countdown (can be interrupted) */
 let autoStartPending = false;
@@ -762,6 +764,12 @@ function createMainWindow(urlPath?: string): BrowserWindow {
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.close();
       splashWindow = null;
+    }
+
+    // Check for shell (launcher) updates after a short delay so it doesn't
+    // compete with the initial page load or server health checks
+    if (shellUpdater) {
+      setTimeout(() => shellUpdater.checkForUpdates(win), 5000);
     }
   });
 
@@ -1621,6 +1629,12 @@ app.whenReady().then(async () => {
 
   // Pre-configure VM manager with last-used directory
   vmManager.setDataDir(appSettings.lastDataDir);
+
+  // Initialize shell auto-updater (skip in dev mode)
+  if (!isDev) {
+    shellUpdater = new ShellUpdater(appSettings);
+    shellUpdater.onBeforeQuitAndInstall(() => stopCurrentBackend());
+  }
 
   // Check Docker availability asynchronously (non-blocking)
   // Embedded mode is always available — uses Electron's own Node.js

@@ -1,6 +1,6 @@
 {
   "name": "quilltap-shell",
-  "version": "4.0.10",
+  "version": "4.0.11",
   "description": "Electron desktop shell for the Quilltap server",
   "main": "dist-electron/main.js",
   "private": true,
@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.8.0",
+    "electron-updater": "^6.8.3",
     "sharp": "^0.34.5",
     "tar": "^7.5.13",
     "yauzl": "^3.2.1"

@@ -123,11 +123,14 @@ jobs:
           security delete-keychain "$KEYCHAIN_PATH" || true
           rm -f "$APPLE_API_KEY" || true
 
-      - name: Upload macOS installer
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v7
         with:
           name: electron-mac
-          path: out/*.dmg
+          path: |
+            out/*.dmg
+            out/*.zip
+            out/latest-mac.yml
           retention-days: 5
 
   build-electron-win:
@@ -163,11 +166,13 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: npx electron-builder --win
 
-      - name: Upload Windows installer
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
         with:
           name: electron-win
-          path: out/*.exe
+          path: |
+            out/*.exe
+            out/latest.yml
           retention-days: 5
 
   build-electron-linux:
@@ -197,13 +202,14 @@ jobs:
       - name: Package with electron-builder
         run: npx electron-builder --linux
 
-      - name: Upload Linux installers
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v7
         with:
           name: electron-linux
           path: |
             out/*.AppImage
             out/*.deb
+            out/latest-linux.yml
           retention-days: 5
 
   create-release:
@@ -284,10 +290,13 @@ jobs:
           # Collect release assets — Windows may be missing if that build failed
           ASSETS=(
             artifacts/electron-mac/*.dmg
+            artifacts/electron-mac/*.zip
+            artifacts/electron-mac/latest-mac.yml
             artifacts/electron-linux/*.AppImage
             artifacts/electron-linux/*.deb
+            artifacts/electron-linux/latest-linux.yml
           )
-          for f in artifacts/electron-win/*.exe; do
+          for f in artifacts/electron-win/*.exe artifacts/electron-win/latest.yml; do
             [ -e "$f" ] && ASSETS+=("$f")
           done
 

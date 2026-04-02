@@ -18,6 +18,8 @@ export interface AppSettings {
   serverVersion: string;
   /** Version tag the user declined to upgrade to (suppresses the prompt until a newer version appears) */
   declinedServerVersion: string;
+  /** Shell version the user declined to upgrade to (suppresses the launcher update prompt until a newer version appears) */
+  declinedShellVersion: string;
 }
 
 /** Derive a human-readable name for a data directory path */
@@ -35,6 +37,7 @@ function defaultSettings(): AppSettings {
     runtimeMode: process.platform === 'linux' ? 'docker' : 'vm',
     serverVersion: 'latest',
     declinedServerVersion: '',
+    declinedShellVersion: '',
   };
 }
 
@@ -88,6 +91,7 @@ export function loadSettings(): AppSettings {
         runtimeMode,
         serverVersion: typeof parsed.serverVersion === 'string' ? parsed.serverVersion : defaults.serverVersion,
         declinedServerVersion: typeof parsed.declinedServerVersion === 'string' ? parsed.declinedServerVersion : defaults.declinedServerVersion,
+        declinedShellVersion: typeof parsed.declinedShellVersion === 'string' ? parsed.declinedShellVersion : defaults.declinedShellVersion,
       };
     }
   } catch (err) {
