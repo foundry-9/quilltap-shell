@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.15
+
+### Features
+
+- **MRU instance ordering**: The instance list on the splash screen is now sorted by most-recently-used. Starting an instance moves it to the top of the list, so the instances you use most often are always within easy reach.
+
 ## 4.0.14
 
 ### Documentation

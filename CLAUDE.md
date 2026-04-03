@@ -57,7 +57,7 @@ This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", a
 
 - If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work. Use worktree isolation for agents when appropriate (your agents have a tendency to want to git stash and blow things up for each other sometimes).
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
-- Check for TypeScript errors by running `npx tsc` rather than building
+- Check for TypeScript errors by running `npx tsc -p electron/tsconfig.json` rather than building
 - Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
 - All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
 

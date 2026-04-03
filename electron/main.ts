@@ -1851,10 +1851,14 @@ ipcMain.on('splash:start', (_event, dirPath: string) => {
   console.log('[Main] Starting with directory:', dirPath);
   autoStartPending = false;
 
-  // Update settings
+  // Update settings — move chosen instance to front so the list is MRU-ordered
   appSettings.lastDataDir = dirPath;
-  if (!appSettings.knownDataDirs.some(d => d.path === dirPath)) {
-    appSettings.knownDataDirs.push({ path: dirPath, name: defaultNameForPath(dirPath) });
+  const existingIdx = appSettings.knownDataDirs.findIndex(d => d.path === dirPath);
+  if (existingIdx >= 0) {
+    const [entry] = appSettings.knownDataDirs.splice(existingIdx, 1);
+    appSettings.knownDataDirs.unshift(entry);
+  } else {
+    appSettings.knownDataDirs.unshift({ path: dirPath, name: defaultNameForPath(dirPath) });
   }
   saveSettings(appSettings);
 
