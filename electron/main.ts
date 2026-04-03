@@ -625,6 +625,17 @@ function buildAppMenu(win: BrowserWindow): void {
             ]),
       ],
     },
+    {
+      label: 'Help',
+      submenu: [
+        ...(shellUpdater
+          ? [{
+              label: 'Check for Updates…',
+              click: () => { shellUpdater.checkForUpdatesManual(win); },
+            }]
+          : []),
+      ],
+    },
   ];
 
   const menu = Menu.buildFromTemplate(template);

@@ -15,6 +15,8 @@ export class ShellUpdater {
   private settings: AppSettings;
   private stopBackend: (() => Promise<void>) | null = null;
   private pendingVersion: string | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly RETRY_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
   constructor(settings: AppSettings) {
     this.settings = settings;
@@ -53,17 +55,24 @@ export class ShellUpdater {
 
     try {
       const result = await autoUpdater.checkForUpdates();
-      if (!result || !result.updateInfo) return;
+      if (!result || !result.updateInfo) {
+        this.scheduleRetry(parentWindow);
+        return;
+      }
 
       const available = result.updateInfo;
       const newVersion = available.version;
 
       // Already running this version (or newer somehow)
-      if (newVersion === APP_VERSION) return;
+      if (newVersion === APP_VERSION) {
+        this.scheduleRetry(parentWindow);
+        return;
+      }
 
       // User already declined this specific version
       if (this.settings.declinedShellVersion === newVersion) {
         console.log(`[ShellUpdater] User previously declined v${newVersion} — skipping`);
+        this.scheduleRetry(parentWindow);
         return;
       }
 
@@ -72,6 +81,58 @@ export class ShellUpdater {
     } catch (err) {
       // Network errors, rate limits, etc. — never fatal
       console.warn('[ShellUpdater] Update check failed (non-fatal):', err);
+      this.scheduleRetry(parentWindow);
+    }
+  }
+
+  /**
+   * Manually check for updates (triggered from the Help menu).  Always shows
+   * feedback — either the update prompt or a "you're up to date" dialog.
+   * Ignores declinedShellVersion since the user explicitly asked.
+   */
+  async checkForUpdatesManual(parentWindow: BrowserWindow | null): Promise<void> {
+    if (!APP_VERSION) {
+      await this.showInfoDialog(parentWindow, 'Version information is not available.');
+      return;
+    }
+
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      if (!result || !result.updateInfo || result.updateInfo.version === APP_VERSION) {
+        await this.showInfoDialog(parentWindow,
+          `You are running the latest version (v${APP_VERSION}).`);
+        return;
+      }
+
+      this.pendingVersion = result.updateInfo.version;
+      await this.promptUser(result.updateInfo, parentWindow);
+    } catch (err) {
+      await this.showInfoDialog(parentWindow,
+        `Could not check for updates.\n\n${String(err)}`);
+    }
+  }
+
+  private scheduleRetry(parentWindow: BrowserWindow | null): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    console.log(`[ShellUpdater] Scheduling next update check in ${ShellUpdater.RETRY_INTERVAL_MS / 3600000}h`);
+    this.retryTimer = setTimeout(
+      () => this.checkForUpdates(parentWindow),
+      ShellUpdater.RETRY_INTERVAL_MS,
+    );
+  }
+
+  private async showInfoDialog(parentWindow: BrowserWindow | null, message: string): Promise<void> {
+    const opts: Electron.MessageBoxOptions = {
+      type: 'info',
+      title: 'Quilltap Launcher Updates',
+      message,
+      buttons: ['OK'],
+    };
+    const win = (parentWindow && !parentWindow.isDestroyed()) ? parentWindow : undefined;
+    if (win) {
+      await dialog.showMessageBox(win, opts);
+    } else {
+      await dialog.showMessageBox(opts);
     }
   }
 

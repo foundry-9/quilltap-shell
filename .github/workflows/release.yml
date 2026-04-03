@@ -115,7 +115,7 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_ISSUER: ${{ secrets.APPLE_API_KEY_ISSUER }}
           DEBUG: electron-notarize*
-        run: NODE_OPTIONS="-r ./electron/patch-fs.js" npx electron-builder --mac
+        run: NODE_OPTIONS="-r ./electron/patch-fs.js" npx electron-builder --mac --publish never
 
       - name: Clean up keychain and API key
         if: always()
@@ -164,7 +164,7 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        run: npx electron-builder --win
+        run: npx electron-builder --win --publish never
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
@@ -202,7 +202,7 @@ jobs:
       - name: Package with electron-builder
         env:
           GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
-        run: npx electron-builder --linux
+        run: npx electron-builder --linux --publish never
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v7

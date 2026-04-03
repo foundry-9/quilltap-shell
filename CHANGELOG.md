@@ -1,5 +1,16 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.14
+
+### Fixes
+
+- **Auto-update reliability**: The launcher update check now retries every 4 hours instead of running only once at startup. If the initial check fails due to a transient network error or the machine being offline, subsequent checks will still catch available updates.
+- **No duplicate draft releases**: Added `--publish never` to all electron-builder invocations in the release workflow so electron-builder no longer auto-creates draft releases with `v`-prefixed tags alongside the real published releases.
+
+### Features
+
+- **Help menu with "Check for Updates..."**: Added a Help menu to the application menu bar. The "Check for Updates…" item lets users manually trigger an update check at any time, bypassing the "declined version" memory and always showing feedback — either the update prompt, a "you're up to date" confirmation, or an error message.
+
 ## 4.0.13
 
 ### Fixes
