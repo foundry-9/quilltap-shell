@@ -609,6 +609,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  -webkit-app-region: no-drag;
 }
 
 .upgrade-banner.hidden {

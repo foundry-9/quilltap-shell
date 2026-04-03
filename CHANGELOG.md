@@ -1,5 +1,12 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.13
+
+### Fixes
+
+- **Upgrade banner not clickable**: The server version upgrade banner on the splash screen was missing `-webkit-app-region: no-drag`, so clicks on the "Update" and "Not now" buttons were swallowed by the frameless window drag handler instead of reaching the button event listeners.
+- **Splash window too short for upgrade banner**: Increased splash window height from 720px to 770px to accommodate the server version upgrade banner without clipping content.
+
 ## 4.0.12
 
 ### Fixes
