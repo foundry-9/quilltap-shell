@@ -67,6 +67,8 @@ export interface DirectoryInfo {
   serverVersion: string;
   /** Available server versions fetched from GitHub (may be empty if offline) */
   availableVersions: VersionOption[];
+  /** Whether to show pre-release / dev versions in the version selector */
+  showPrerelease: boolean;
   /** Present when the pinned server version is older than the latest in the same channel */
   upgradeAvailable?: { from: string; to: string; toLabel: string };
 }

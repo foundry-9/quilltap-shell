@@ -20,6 +20,8 @@ export interface AppSettings {
   declinedServerVersion: string;
   /** Shell version the user declined to upgrade to (suppresses the launcher update prompt until a newer version appears) */
   declinedShellVersion: string;
+  /** Whether to show pre-release / dev versions in the server version selector */
+  showPrerelease: boolean;
 }
 
 /** Derive a human-readable name for a data directory path */
@@ -38,6 +40,7 @@ function defaultSettings(): AppSettings {
     serverVersion: 'latest',
     declinedServerVersion: '',
     declinedShellVersion: '',
+    showPrerelease: false,
   };
 }
 
@@ -92,6 +95,7 @@ export function loadSettings(): AppSettings {
         serverVersion: typeof parsed.serverVersion === 'string' ? parsed.serverVersion : defaults.serverVersion,
         declinedServerVersion: typeof parsed.declinedServerVersion === 'string' ? parsed.declinedServerVersion : defaults.declinedServerVersion,
         declinedShellVersion: typeof parsed.declinedShellVersion === 'string' ? parsed.declinedShellVersion : defaults.declinedShellVersion,
+        showPrerelease: typeof parsed.showPrerelease === 'boolean' ? parsed.showPrerelease : defaults.showPrerelease,
       };
     }
   } catch (err) {

@@ -29,7 +29,13 @@
       </div>
     </div>
     <div class="version-section" id="versionSection" style="display: none;">
-      <div class="directory-label">Server Version</div>
+      <div class="version-header">
+        <div class="directory-label">Server Version</div>
+        <label class="prerelease-label" id="prereleaseLabel">
+          <input type="checkbox" id="prereleaseCheckbox">
+          <span>Prerelease</span>
+        </label>
+      </div>
       <select class="version-select" id="versionSelect">
         <option value="latest">Latest Release</option>
         <option value="latest-dev">Latest Dev</option>

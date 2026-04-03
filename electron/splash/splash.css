@@ -453,6 +453,36 @@ body {
   align-items: center;
 }
 
+.version-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prerelease-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #888888;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.prerelease-label input[type="checkbox"] {
+  accent-color: #888888;
+}
+
+.prerelease-label.active {
+  color: #ff4444;
+  font-weight: 600;
+}
+
+.prerelease-label.active input[type="checkbox"] {
+  accent-color: #ff4444;
+}
+
 .version-select {
   width: 100%;
   padding: 7px 12px;

@@ -1,5 +1,15 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.16
+
+### Fixes
+
+- **Update check available during splash screen**: The launcher auto-update check previously only ran after the main window appeared, so users lingering on the splash screen (directory chooser) were never prompted about new versions. The check now also runs shortly after the splash screen appears. Additionally, a minimal application menu with **Help > Check for Updates…** is now set during the splash phase, so users can manually check for updates before launching a server.
+
+### Features
+
+- **Prerelease version filter**: Added a "Prerelease" checkbox next to the Server Version selector on the splash screen. When unchecked (the default), the "Latest Dev" option and all pre-release tagged versions are hidden from the dropdown. When checked, the checkbox and label turn bright red as a visual reminder, and the full version list (including dev builds) is shown. The setting persists across app restarts.
+
 ## 4.0.15
 
 ### Features

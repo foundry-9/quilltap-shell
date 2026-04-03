@@ -201,6 +201,7 @@ function sendDirectoryInfo(): void {
     platform: process.platform,
     serverVersion: appSettings.serverVersion || 'latest',
     availableVersions: versions || cachedAvailableVersions || [],
+    showPrerelease: appSettings.showPrerelease,
     upgradeAvailable: checkForUpgrade(
       appSettings.serverVersion,
       versions || cachedAvailableVersions || [],
@@ -415,6 +416,47 @@ function truncate(text: string, max: number = 120): string {
   return text.substring(0, max - 3) + '...';
 }
 
+/** Build a minimal application menu for the splash screen phase (macOS shows default Help otherwise) */
+function buildSplashMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin'
+      ? [{
+          label: app.name,
+          submenu: [
+            { role: 'about' as const },
+            { type: 'separator' as const },
+            { role: 'services' as const },
+            { type: 'separator' as const },
+            { role: 'hide' as const },
+            { role: 'hideOthers' as const },
+            { role: 'unhide' as const },
+            { type: 'separator' as const },
+            { role: 'quit' as const },
+          ],
+        }]
+      : [{
+          label: 'File',
+          submenu: [
+            { role: 'quit' as const },
+          ],
+        }]),
+    {
+      label: 'Help',
+      submenu: [
+        ...(shellUpdater
+          ? [{
+              label: 'Check for Updates…',
+              click: () => { shellUpdater.checkForUpdatesManual(splashWindow); },
+            }]
+          : []),
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 /** Create the splash window */
 function createSplashWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -474,6 +516,7 @@ async function restartServer(): Promise<void> {
 
   // Create splash BEFORE closing main window to avoid triggering window-all-closed quit
   splashWindow = createSplashWindow();
+  buildSplashMenu();
 
   // Now safe to close main window
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -503,6 +546,7 @@ async function changeSite(): Promise<void> {
 
   // Create splash BEFORE closing main window to avoid triggering window-all-closed quit
   splashWindow = createSplashWindow();
+  buildSplashMenu();
 
   // Now safe to close main window
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1675,6 +1719,17 @@ app.whenReady().then(async () => {
 
   splashWindow = createSplashWindow();
 
+  // Set a minimal app menu so "Check for Updates…" is available during splash
+  buildSplashMenu();
+
+  // Check for shell updates shortly after the splash appears, so users who
+  // linger on the directory chooser still get prompted about new versions
+  if (shellUpdater) {
+    splashWindow.once('ready-to-show', () => {
+      setTimeout(() => shellUpdater.checkForUpdates(splashWindow), 3000);
+    });
+  }
+
   // Wait for splash to load before starting sequence
   splashWindow.webContents.on('did-finish-load', () => {
     onSplashReady();
@@ -1697,6 +1752,7 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     platform: process.platform,
     serverVersion: appSettings.serverVersion || 'latest',
     availableVersions: cachedAvailableVersions || [],
+    showPrerelease: appSettings.showPrerelease,
   };
 });
 
@@ -1746,6 +1802,13 @@ ipcMain.on('splash:set-runtime-mode', (_event, mode: string) => {
 ipcMain.on('splash:set-server-version', (_event, version: string) => {
   console.log('[Main] Server version set to:', version);
   appSettings.serverVersion = version;
+  saveSettings(appSettings);
+});
+
+/** Toggle pre-release version visibility */
+ipcMain.on('splash:set-show-prerelease', (_event, enabled: boolean) => {
+  console.log('[Main] Show prerelease set to:', enabled);
+  appSettings.showPrerelease = enabled;
   saveSettings(appSettings);
 });
 

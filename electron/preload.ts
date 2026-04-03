@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('quilltap', {
   setRuntimeMode: (mode: string) => ipcRenderer.send('splash:set-runtime-mode', mode),
   /** Set the server version to use ('latest', 'latest-dev', or a specific tag) */
   setServerVersion: (version: string) => ipcRenderer.send('splash:set-server-version', version),
+  /** Toggle pre-release version visibility in the version selector */
+  setShowPrerelease: (enabled: boolean) => ipcRenderer.send('splash:set-show-prerelease', enabled),
   /** Accept an upgrade prompt — switches pinned version to the offered one */
   acceptUpgrade: (version: string) => ipcRenderer.send('splash:accept-upgrade', version),
   /** Decline an upgrade prompt — suppresses the prompt for this version */

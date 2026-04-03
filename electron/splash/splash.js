@@ -31,6 +31,8 @@ const vmLabelEl = document.getElementById('vmLabel');
 // Version selector elements
 const versionSection = document.getElementById('versionSection');
 const versionSelect = document.getElementById('versionSelect');
+const prereleaseCheckbox = document.getElementById('prereleaseCheckbox');
+const prereleaseLabel = document.getElementById('prereleaseLabel');
 
 // Upgrade banner elements
 const upgradeBanner = document.getElementById('upgradeBanner');
@@ -75,6 +77,9 @@ var lastAvailableVersions = [];
 
 /** Last known server version setting */
 var lastServerVersion = 'latest';
+
+/** Whether to show pre-release versions */
+var showPrerelease = false;
 
 /** Directory pending deletion (for the confirmation dialog) */
 var pendingDeleteDir = '';
@@ -167,6 +172,16 @@ function updateRuntimeButtons() {
   }
 }
 
+/** Update the prerelease checkbox visual state */
+function updatePrereleaseCheckbox() {
+  prereleaseCheckbox.checked = showPrerelease;
+  if (showPrerelease) {
+    prereleaseLabel.classList.add('active');
+  } else {
+    prereleaseLabel.classList.remove('active');
+  }
+}
+
 /** Update the version selector visibility and contents */
 function updateVersionSelector(versions, serverVersion) {
   // Show version selector for all runtime modes
@@ -180,7 +195,7 @@ function updateVersionSelector(versions, serverVersion) {
   // Remember current selection
   var currentValue = lastServerVersion || versionSelect.value || 'latest';
 
-  // Rebuild options: keep the two meta-options, then add specific versions
+  // Rebuild options
   versionSelect.innerHTML = '';
 
   var latestOpt = document.createElement('option');
@@ -188,10 +203,13 @@ function updateVersionSelector(versions, serverVersion) {
   latestOpt.textContent = 'Latest Release';
   versionSelect.appendChild(latestOpt);
 
-  var latestDevOpt = document.createElement('option');
-  latestDevOpt.value = 'latest-dev';
-  latestDevOpt.textContent = 'Latest Dev';
-  versionSelect.appendChild(latestDevOpt);
+  // Only show "Latest Dev" when prerelease is enabled
+  if (showPrerelease) {
+    var latestDevOpt = document.createElement('option');
+    latestDevOpt.value = 'latest-dev';
+    latestDevOpt.textContent = 'Latest Dev';
+    versionSelect.appendChild(latestDevOpt);
+  }
 
   if (versions && versions.length > 0) {
     var stableGroup = document.createElement('optgroup');
@@ -207,8 +225,10 @@ function updateVersionSelector(versions, serverVersion) {
       opt.value = v.tag;
       opt.textContent = v.label;
       if (v.prerelease) {
-        devGroup.appendChild(opt);
-        hasDev = true;
+        if (showPrerelease) {
+          devGroup.appendChild(opt);
+          hasDev = true;
+        }
       } else {
         stableGroup.appendChild(opt);
         hasStable = true;
@@ -232,6 +252,14 @@ function updateVersionSelector(versions, serverVersion) {
     customOpt.value = currentValue;
     customOpt.textContent = currentValue + ' (saved)';
     versionSelect.appendChild(customOpt);
+  }
+
+  // If prerelease was just unchecked and the current value is a dev selection,
+  // fall back to 'latest'
+  if (!showPrerelease && !found && (currentValue === 'latest-dev')) {
+    currentValue = 'latest';
+    lastServerVersion = currentValue;
+    window.quilltap.setServerVersion(currentValue);
   }
 
   versionSelect.value = currentValue;
@@ -478,7 +506,9 @@ window.quilltap.onDirectories(function(data) {
     vmLabelEl.textContent = data.vmLabel;
   }
 
-  // Update version selector
+  // Update prerelease setting and version selector
+  showPrerelease = !!data.showPrerelease;
+  updatePrereleaseCheckbox();
   updateVersionSelector(data.availableVersions, data.serverVersion);
 
   // Show or hide upgrade banner
@@ -571,6 +601,14 @@ runtimeEmbeddedBtn.addEventListener('click', function() {
 /** Server version selector */
 versionSelect.addEventListener('change', function() {
   window.quilltap.setServerVersion(versionSelect.value);
+});
+
+/** Prerelease checkbox */
+prereleaseCheckbox.addEventListener('change', function() {
+  showPrerelease = prereleaseCheckbox.checked;
+  updatePrereleaseCheckbox();
+  updateVersionSelector(null, null);
+  window.quilltap.setShowPrerelease(showPrerelease);
 });
 
 /** Delete confirmation: config only */
