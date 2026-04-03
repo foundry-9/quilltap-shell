@@ -2,6 +2,10 @@
 
 ## 4.0.14
 
+### Documentation
+
+- **README rewrite**: Replaced the placeholder two-line README with comprehensive documentation covering the three runtime modes (Direct, Docker, VM), splash screen usage, data directories, server version selection, auto-update behavior, building from source, the release pipeline, and architecture notes.
+
 ### Fixes
 
 - **Auto-update reliability**: The launcher update check now retries every 4 hours instead of running only once at startup. If the initial check fails due to a transient network error or the machine being offline, subsequent checks will still catch available updates.
