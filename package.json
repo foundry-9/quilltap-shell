@@ -1,6 +1,6 @@
 {
   "name": "quilltap-shell",
-  "version": "4.0.16",
+  "version": "4.0.17",
   "description": "Electron desktop shell for the Quilltap server",
   "main": "dist-electron/main.js",
   "private": true,

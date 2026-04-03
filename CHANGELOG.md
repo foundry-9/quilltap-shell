@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.0.17
+
+### Features
+
+- **Minimum server version enforcement**: The launcher now reads `minServerVersion` from each instance's `data/quilltap.dbkey` file. If the selected server version is older than the minimum, launch is blocked with a clear error message asking the user to choose a newer version. The minimum version (if any) is shown next to each instance name on the splash screen directory list, prefixed with "≥". Version comparison correctly treats pre-releases as older than their base release (e.g. `3.3.0-dev.25` < `3.3.0`).
+
 ## 4.0.16
 
 ### Fixes

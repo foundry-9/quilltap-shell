@@ -53,6 +53,8 @@ export interface DirectoryInfo {
   autoStart: boolean;
   /** Disk usage per directory path (may arrive asynchronously) */
   sizes: Record<string, DirectorySizeInfo>;
+  /** Minimum server version per directory path, read from data/quilltap.dbkey (empty string if none) */
+  minServerVersions: Record<string, string>;
   /** Current runtime mode (docker or vm) */
   runtimeMode: RuntimeMode;
   /** Whether Docker CLI is available on this system */

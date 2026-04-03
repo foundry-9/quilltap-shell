@@ -69,6 +69,9 @@ var selectedDir = '';
 /** Current sizes data (may arrive after initial directory list) */
 var currentSizes = {};
 
+/** Minimum server versions per directory path (from data/quilltap.dbkey) */
+var currentMinServerVersions = {};
+
 /** Current runtime mode */
 var currentRuntimeMode = 'vm';
 
@@ -308,7 +311,7 @@ function hideRenameDialog() {
 }
 
 /** Render the directory list from the given info */
-function renderDirectoryList(dirs, lastUsed, sizes) {
+function renderDirectoryList(dirs, lastUsed, sizes, minServerVersions) {
   directoryList.innerHTML = '';
   selectedDir = lastUsed || (dirs.length > 0 ? dirs[0].path : '');
 
@@ -327,11 +330,26 @@ function renderDirectoryList(dirs, lastUsed, sizes) {
     var infoWrap = document.createElement('div');
     infoWrap.className = 'directory-item-info';
 
+    var nameRow = document.createElement('div');
+    nameRow.className = 'directory-item-name-row';
+
     var nameLabel = document.createElement('span');
     nameLabel.className = 'directory-item-name';
     nameLabel.textContent = dirName;
     nameLabel.title = dirName;
-    infoWrap.appendChild(nameLabel);
+    nameRow.appendChild(nameLabel);
+
+    // Show minServerVersion alongside the name if present
+    var minVer = minServerVersions && minServerVersions[dirPath];
+    if (minVer) {
+      var minVerLabel = document.createElement('span');
+      minVerLabel.className = 'directory-item-min-version';
+      minVerLabel.textContent = '\u2265 ' + minVer;
+      minVerLabel.title = 'Minimum server version: ' + minVer;
+      nameRow.appendChild(minVerLabel);
+    }
+
+    infoWrap.appendChild(nameRow);
 
     var pathLabel = document.createElement('span');
     pathLabel.className = 'directory-item-path';
@@ -475,7 +493,8 @@ window.quilltap.onError(function(data) {
 /** Handle directory info updates from main process */
 window.quilltap.onDirectories(function(data) {
   currentSizes = data.sizes || {};
-  renderDirectoryList(data.dirs, data.lastUsed, currentSizes);
+  currentMinServerVersions = data.minServerVersions || {};
+  renderDirectoryList(data.dirs, data.lastUsed, currentSizes, currentMinServerVersions);
   autoStartCheckbox.checked = data.autoStart;
 
   // Update runtime mode state

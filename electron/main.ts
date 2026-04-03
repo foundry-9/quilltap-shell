@@ -190,6 +190,9 @@ function checkForUpgrade(
 function sendDirectoryInfo(): void {
   if (!splashWindow || splashWindow.isDestroyed()) return;
 
+  // Read minServerVersion from each instance's dbkey (fast synchronous I/O)
+  const minServerVersions = readMinServerVersions();
+
   const buildCommon = (versions?: VersionOption[]) => ({
     dirs: appSettings.knownDataDirs,
     lastUsed: appSettings.lastDataDir,
@@ -202,6 +205,7 @@ function sendDirectoryInfo(): void {
     serverVersion: appSettings.serverVersion || 'latest',
     availableVersions: versions || cachedAvailableVersions || [],
     showPrerelease: appSettings.showPrerelease,
+    minServerVersions,
     upgradeAvailable: checkForUpgrade(
       appSettings.serverVersion,
       versions || cachedAvailableVersions || [],
@@ -233,6 +237,26 @@ function sendDirectoryInfo(): void {
       console.warn('[Main] Could not fetch available versions:', err);
     });
   }
+}
+
+/** Read minServerVersion from each instance's data/quilltap.dbkey file */
+function readMinServerVersions(): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const dir of appSettings.knownDataDirs) {
+    const dbkeyPath = path.join(dir.path, 'data', 'quilltap.dbkey');
+    try {
+      if (fs.existsSync(dbkeyPath)) {
+        const raw = fs.readFileSync(dbkeyPath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.minServerVersion === 'string' && parsed.minServerVersion) {
+          result[dir.path] = parsed.minServerVersion;
+        }
+      }
+    } catch (err) {
+      console.warn('[Main] Error reading dbkey for', dir.path, '(non-fatal):', err);
+    }
+  }
+  return result;
 }
 
 /** Calculate disk sizes for all known data directories */
@@ -1047,6 +1071,9 @@ async function startupSequence(dataDir: string): Promise<void> {
     }
   }
 
+  // Check minServerVersion requirement before proceeding
+  if (!checkMinServerVersion(dataDir, targetVersion)) return;
+
   // Configure download manager with the resolved version
   downloadManager.setTargetVersion(targetVersion);
 
@@ -1241,8 +1268,36 @@ async function startupSequence(dataDir: string): Promise<void> {
 }
 
 /**
- * Route startup to the correct backend based on runtime mode setting.
+ * Check whether a resolved server version satisfies the instance's minServerVersion
+ * requirement (read from data/quilltap.dbkey). Returns true if launch may proceed.
+ * Shows an error on the splash screen and returns false if the version is too old.
  */
+function checkMinServerVersion(dataDir: string, resolvedVersion: string): boolean {
+  const dbkeyPath = path.join(dataDir, 'data', 'quilltap.dbkey');
+  try {
+    if (!fs.existsSync(dbkeyPath)) return true;
+    const raw = fs.readFileSync(dbkeyPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    const minVersion = parsed.minServerVersion;
+    if (typeof minVersion !== 'string' || !minVersion) return true;
+
+    if (compareVersions(resolvedVersion, minVersion) < 0) {
+      sendSplashError(
+        `This instance requires server version ${minVersion} or newer, ` +
+        `but the selected version is ${resolvedVersion}.\n\n` +
+        `Please choose a newer server version and try again.`,
+        true,
+      );
+      return false;
+    }
+  } catch (err) {
+    // If we can't read the dbkey, don't block launch
+    console.warn('[Main] Error checking minServerVersion (non-fatal):', err);
+  }
+  return true;
+}
+
+/** Route startup to the correct backend based on runtime mode setting. */
 function routeStartup(dataDir: string): void {
   if (appSettings.runtimeMode === 'docker') {
     dockerStartupSequence(dataDir);
@@ -1339,6 +1394,9 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
       }
     }
   }
+
+  // Check minServerVersion requirement before proceeding
+  if (!checkMinServerVersion(dataDir, targetVersion)) return;
 
   dockerManager.setImageVersion(targetVersion);
 
@@ -1509,6 +1567,9 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
       }
     }
   }
+
+  // Check minServerVersion requirement before proceeding
+  if (!checkMinServerVersion(dataDir, targetVersion)) return;
 
   if (!standaloneManager.isCacheValid(targetVersion)) {
     sendSplashUpdate({
@@ -1753,6 +1814,7 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     serverVersion: appSettings.serverVersion || 'latest',
     availableVersions: cachedAvailableVersions || [],
     showPrerelease: appSettings.showPrerelease,
+    minServerVersions: readMinServerVersions(),
   };
 });
 

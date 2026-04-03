@@ -312,6 +312,13 @@ body {
   gap: 1px;
 }
 
+.directory-item-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
 .directory-item-name {
   font-size: 13px;
   font-weight: 600;
@@ -319,6 +326,13 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.directory-item-min-version {
+  font-size: 10px;
+  color: #999977;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .directory-item-path {
