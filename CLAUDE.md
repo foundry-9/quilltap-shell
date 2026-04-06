@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize your work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
 
-This repository is for the Electron shell that runs the Quilltap server, whose source code can be found at [GitHub](https://github.com/foundry-9/quilltap). It is meant to:
+This repository is for the Electron shell that runs the Quilltap server, whose source code can be found at [GitHub](https://github.com/foundry-9/quilltap-server). It is meant to:
 
 1. Load and run the code for the server directly, by loading the specified or latest version (either dev or release, specified by the user) of the quilltap server code as built in the Quilltap repository release, then install the correct platform-specific Node.js modules that are not pure Javascript, then run it using Electron's bundled version of Node.js.
 2. If Docker or Docker Desktop are installed, then it can load the specified image of the Quilltap server as a Docker image and run that as the server.
@@ -18,7 +18,7 @@ This repository is for the Electron shell that runs the Quilltap server, whose s
 - **Language**: TypeScript
 - **Package Manager**: npm
 - **Runtime**: Electron
-- **Server**: Downloads and runs the [Quilltap server](https://github.com/foundry-9/quilltap) standalone tarball, or manages it via Docker, WSL2, or Lima
+- **Server**: Downloads and runs the [Quilltap server](https://github.com/foundry-9/quilltap-server) standalone tarball, or manages it via Docker, WSL2, or Lima
 
 ## Quilltap Conventions
 

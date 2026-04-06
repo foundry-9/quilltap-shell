@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.0
+
+### Features
+
+- **Server repository move support**: Updated the launcher's GitHub release source and documentation to use `foundry-9/quilltap-server` instead of the old `foundry-9/quilltap` repository. This keeps standalone server downloads and user-facing links pointed at the proper home after the repo migration.
+
 ## 4.0.17
 
 ### Features

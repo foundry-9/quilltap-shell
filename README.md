@@ -127,7 +127,7 @@ In Docker and VM modes, the Launcher manages container/VM lifecycle through the 
 
 The Launcher is not the Quilltap server. It does not contain the chat interface, the character system, the Commonplace Book, the Concierge, or any of the subsystems that make Quilltap what it is. It is the parlor that opens onto the rest of the house — the coat check, the threshold, the mechanism by which the door opens and the lights come on.
 
-The server lives at [foundry-9/quilltap](https://github.com/foundry-9/quilltap). The documentation lives at [quilltap.ai](https://quilltap.ai). If you have arrived here, you are in the right place to get started. If you have questions about what happens after the door opens, those are the places to look.
+The server lives at [foundry-9/quilltap-server](https://github.com/foundry-9/quilltap-server). The documentation lives at [quilltap.ai](https://quilltap.ai). If you have arrived here, you are in the right place to get started. If you have questions about what happens after the door opens, those are the places to look.
 
 ---
 

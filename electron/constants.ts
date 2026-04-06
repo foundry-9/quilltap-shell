@@ -28,7 +28,7 @@ export const WSL_DISTRO_INSTALL_DIR = path.join(os.homedir(), '.qtvm', 'quilltap
 // --- Standalone server download ---
 
 /** GitHub repository for release asset URLs */
-export const GITHUB_REPO = 'foundry-9/quilltap';
+export const GITHUB_REPO = 'foundry-9/quilltap-server';
 
 /** Directory where the standalone server tarball is cached (extracted) */
 export const STANDALONE_CACHE_DIR = (() => {
