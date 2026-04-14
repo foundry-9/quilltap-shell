@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.1
+
+### Fixes
+
+- **Increased server memory limit**: Raised `--max-old-space-size` from 2048 MB to 4096 MB across all launch modes (embedded, Lima, WSL2). The previous 2 GB cap was effectively V8's default and caused the server to OOM-crash within a minute of startup under normal use.
+
 ## 4.1.0
 
 ### Features

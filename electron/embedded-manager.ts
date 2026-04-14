@@ -138,7 +138,7 @@ export class EmbeddedManager {
         QUILLTAP_TIMEZONE: hostTimezone,
         QUILLTAP_SHELL: APP_VERSION,
         QUILLTAP_SHELL_CAPABILITIES: SHELL_CAPABILITIES,
-        NODE_OPTIONS: '--max-old-space-size=2048',
+        NODE_OPTIONS: '--max-old-space-size=4096',
         // Module resolution
         NODE_PATH: modulesDir,
         // Preserve PATH for native module resolution
