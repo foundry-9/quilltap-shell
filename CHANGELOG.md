@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.2
+
+### Fixes
+
+- **Correct ordering of numeric pre-release suffixes**: `compareVersions` previously compared pre-release suffixes with `localeCompare`, which sorts `dev.99` after `dev.100` because `'9' > '1'` lexicographically. This caused the `minServerVersion` check (and upgrade-available check) to misjudge adjacent dev builds. Suffixes are now split on `.` and compared per semver §11.4 — all-numeric segments numerically, alphanumeric lexicographically, numeric outranked by alphanumeric, shorter prefix losing to longer.
+
 ## 4.1.1
 
 ### Fixes
