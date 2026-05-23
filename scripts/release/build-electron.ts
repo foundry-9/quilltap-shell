@@ -86,11 +86,18 @@ function runElectronBuilder(signed: boolean): number {
 
   const args = [`--${platform}`, '--publish', 'never'];
   console.log(`Running: npx electron-builder ${args.join(' ')} (signed=${signed})`);
+  // On Windows, `npx` is `npx.cmd`; Node's `spawn` won't resolve `.cmd` shims
+  // without `shell: true`, so without this the process fails with ENOENT and
+  // electron-builder never actually runs.
   const result = spawnSync('npx', ['electron-builder', ...args], {
     cwd: PROJECT_ROOT,
     stdio: 'inherit',
     env,
+    shell: process.platform === 'win32',
   });
+  if (result.error) {
+    console.error(`Failed to spawn npx: ${result.error.message}`);
+  }
   return result.status ?? 1;
 }
 

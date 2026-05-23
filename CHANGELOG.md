@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.8
+
+### Fixes
+
+- **Windows release builds now actually run electron-builder**: `scripts/release/build-electron.ts` (introduced in 4.1.4 but never tagged on a Windows-eligible release until 4.1.7) invoked `spawnSync('npx', …)` without `shell: true`. On macOS and Linux `npx` is a real binary and Node found it; on Windows `npx` is the `npx.cmd` shim, and Node's `spawn` does not search for `.cmd`/`.bat` extensions unless a shell is involved. The call therefore returned ENOENT in roughly three milliseconds, the script reported `status ?? 1` without surfacing `result.error`, and the 4.1.7 release log read "Both signed and unsigned win builds failed" with no further explanation — a near-instantaneous double failure that was, in fact, electron-builder having never been so much as introduced. The spawn now sets `shell: true` on Win32 and logs `result.error` when present, so the next surprise spawn failure announces itself rather than performing a vanishing act.
+
 ## 4.1.7
 
 ### Features
