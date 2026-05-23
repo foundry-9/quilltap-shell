@@ -10,14 +10,19 @@
 # Apple Virtualization.framework — no QEMU dependency
 vmType: vz
 
-# Alpine Linux nocloud images with cloud-init (required for Lima SSH provisioning)
+# Debian 12 (bookworm) nocloud images with cloud-init.
+# We use Debian/glibc (not Alpine/musl) to match the standalone tarball, which
+# is built FROM node:24-bookworm-slim (see quilltap-server/Dockerfile). The Node
+# binary and native modules in the tarball are glibc-linked and will not exec
+# on a musl host — execve returns ENOENT for the missing /lib/ld-linux-*.so.1.
+#
+# To pin a snapshot for releases, replace `latest` with a dated directory from
+# https://cloud.debian.org/images/cloud/bookworm/ and fill in the SHA512 digest.
 images:
-  - location: "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.2-aarch64-uefi-cloudinit-r0.qcow2"
+  - location: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-nocloud-arm64.qcow2"
     arch: "aarch64"
-    digest: "sha512:08d340126b222abae651a20aa63c3ee3dc601d703de7879d2a6bc1fe82a3664d058a2c55ad0cf8a874327f7535e3af8a9384ce438217d6f32200cad1462a5b32"
-  - location: "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.2-x86_64-uefi-cloudinit-r0.qcow2"
+  - location: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-nocloud-amd64.qcow2"
     arch: "x86_64"
-    digest: "sha512:1aaf22b4a584e69e228e6aa38a295159c0143d9ccebe7ad4928e92b414714066af3bfe5f9e0ca4d4d64a70ca9fea09033af90258a6f2344130d70b660151127a"
 
 cpus: 2
 memory: "4GiB"
@@ -41,7 +46,7 @@ portForwards:
     hostPort: 5050
     proto: tcp
 
-# Alpine uses OpenRC, not systemd — disable containerd (requires systemd)
+# We run Quilltap directly via systemd; no containerd needed.
 containerd:
   system: false
   user: false
@@ -49,7 +54,8 @@ containerd:
 networks:
   - vzNAT: true
 
-# Provision the VM: extract Node.js + app from Docker rootfs, start the service
+# Provision the VM: extract Node.js + app from the rootfs tarball, install the
+# systemd service, and start it.
 provision:
   - mode: system
     script: |
@@ -57,6 +63,8 @@ provision:
       set -eux
 
       # ── Environment variables ──────────────────────────────────────
+      # Two copies: one for interactive shells (profile.d), one for the
+      # systemd unit (EnvironmentFile, plain KEY=VALUE lines).
       cat > /etc/profile.d/quilltap.sh <<'ENVEOF'
       export LIMA_CONTAINER=true
       export QUILLTAP_DATA_DIR=/data/quilltap
@@ -71,7 +79,21 @@ provision:
       ENVEOF
       chmod 644 /etc/profile.d/quilltap.sh
 
-      # Source them now for the rest of this script
+      cat > /etc/quilltap.env <<'ENVEOF'
+      LIMA_CONTAINER=true
+      QUILLTAP_DATA_DIR=/data/quilltap
+      QUILLTAP_HOST_DATA_DIR=~/Library/Application Support/Quilltap
+      NODE_ENV=production
+      PORT=3000
+      HOSTNAME=0.0.0.0
+      NODE_OPTIONS=--max-old-space-size=4096
+      QUILLTAP_TIMEZONE=
+      QUILLTAP_SHELL=
+      QUILLTAP_SHELL_CAPABILITIES=
+      ENVEOF
+      chmod 644 /etc/quilltap.env
+
+      # Source for the rest of this script
       . /etc/profile.d/quilltap.sh
 
       # ── Ensure data directories exist ──────────────────────────────
@@ -81,12 +103,10 @@ provision:
                /data/quilltap/plugins/npm
 
       # ── Extract Node.js and the Quilltap app from the rootfs ───────
-      # We extract Node.js from the Docker image rather than installing
-      # via apk, because Alpine's packaged nodejs has SQLite symbol
-      # relocation errors. The Docker image's Node (node:22-alpine) is
-      # built correctly. Since both Node and /app/ come from the same
-      # image, native modules (better-sqlite3) are already compiled
-      # for the right Node version — no npm rebuild needed.
+      # The tarball is produced from node:24-bookworm-slim (Debian/glibc)
+      # via quilltap-server's Dockerfile. Native modules (better-sqlite3,
+      # sharp, @napi-rs/canvas) ship pre-compiled glibc binaries — no
+      # npm rebuild needed once we extract.
       TARBALL=/mnt/lima-images/quilltap-linux-arm64.tar.gz
       if [ ! -f "$TARBALL" ]; then
         echo "ERROR: Rootfs tarball not found at $TARBALL"
@@ -97,45 +117,38 @@ provision:
       # Extract Node.js runtime and the application
       tar xzf "$TARBALL" -C / usr/local/bin/node usr/local/lib/node_modules/ app/
 
-      # Install runtime library dependencies that native modules need
-      apk update
-      apk add --no-cache libstdc++ libgcc zip unzip
+      # Install runtime tools we need beyond the Debian base. libstdc++6,
+      # libgcc-s1, and zlib1g already ship in bookworm-slim.
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -y --no-install-recommends zip unzip
+      rm -rf /var/lib/apt/lists/*
 
       # ── Remove Docker false-positive marker ────────────────────────
       rm -f /.dockerenv
 
-      # ── OpenRC service for Quilltap ────────────────────────────────
-      cat > /etc/init.d/quilltap <<'SVCEOF'
-      #!/sbin/openrc-run
+      # ── systemd service for Quilltap ───────────────────────────────
+      cat > /etc/systemd/system/quilltap.service <<'SVCEOF'
+      [Unit]
+      Description=Quilltap AI Workspace
+      After=network-online.target
+      Wants=network-online.target
 
-      name="quilltap"
-      description="Quilltap AI Workspace"
+      [Service]
+      Type=simple
+      EnvironmentFile=/etc/quilltap.env
+      WorkingDirectory=/app
+      ExecStart=/usr/local/bin/node /app/server.js
+      Restart=on-failure
+      RestartSec=2
+      StandardOutput=append:/data/quilltap/logs/quilltap-stdout.log
+      StandardError=append:/data/quilltap/logs/quilltap-stderr.log
 
-      command="/usr/local/bin/node"
-      command_args="/app/server.js"
-      command_background=true
-      pidfile="/run/${RC_SVCNAME}.pid"
-      output_log="/data/quilltap/logs/quilltap-stdout.log"
-      error_log="/data/quilltap/logs/quilltap-stderr.log"
-
-      export LIMA_CONTAINER=true
-      export QUILLTAP_DATA_DIR=/data/quilltap
-      export QUILLTAP_HOST_DATA_DIR="~/Library/Application Support/Quilltap"
-      export NODE_ENV=production
-      export PORT=3000
-      export HOSTNAME=0.0.0.0
-      export NODE_OPTIONS="--max-old-space-size=4096"
-      export QUILLTAP_TIMEZONE=""
-      export QUILLTAP_SHELL=""
-      export QUILLTAP_SHELL_CAPABILITIES=""
-
-      depend() {
-        need net
-        after firewall
-      }
+      [Install]
+      WantedBy=multi-user.target
       SVCEOF
-      chmod 755 /etc/init.d/quilltap
+      chmod 644 /etc/systemd/system/quilltap.service
 
       # Enable and start the service
-      rc-update add quilltap default
-      rc-service quilltap start
+      systemctl daemon-reload
+      systemctl enable --now quilltap.service

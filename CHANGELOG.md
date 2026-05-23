@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.3
+
+### Fixes
+
+- **Lima VM base image switched from Alpine to Debian 12**: The standalone tarball is built `FROM node:24-bookworm-slim` (glibc), but `lima/quilltap.yaml` was provisioning an Alpine 3.21 (musl) VM. The Node binary in the tarball would not exec — `start-stop-daemon` reported "No such file or directory" because `execve(2)` returns ENOENT when the ELF interpreter is missing, and Alpine has no `/lib/ld-linux-aarch64.so.1`. The yaml now uses Debian 12 nocloud images (arm64 + amd64), apt instead of apk, and a systemd unit at `/etc/systemd/system/quilltap.service` instead of the OpenRC `/etc/init.d/quilltap` script. Existing VMs created from the old yaml will need to be deleted (`limactl delete quilltap-*`) so the new template applies.
+
 ## 4.1.2
 
 ### Fixes
