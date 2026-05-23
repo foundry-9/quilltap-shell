@@ -10,6 +10,7 @@ const loadingContainer = document.getElementById('loading');
 const errorContainer = document.getElementById('errorContainer');
 const errorMessage = document.getElementById('errorMessage');
 const retryBtn = document.getElementById('retryBtn');
+const errorChangeSettingsBtn = document.getElementById('errorChangeSettingsBtn');
 const quitBtn = document.getElementById('quitBtn');
 const logo = document.getElementById('logo');
 
@@ -553,6 +554,11 @@ window.quilltap.onDirectories(function(data) {
 /** Retry button */
 retryBtn.addEventListener('click', function() {
   window.quilltap.retry();
+});
+
+/** Change Settings button (error state) — escape from a failed startup back to the chooser */
+errorChangeSettingsBtn.addEventListener('click', function() {
+  window.quilltap.showDirectoryChooser();
 });
 
 /** Quit button (error state) */

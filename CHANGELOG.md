@@ -1,5 +1,18 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.5
+
+### Features
+
+- **"Change Settings…" escape hatch in the splash error pane**: The error state on the splash screen used to offer only Retry and Quit. Retry blindly reran `routeStartup(appSettings.lastDataDir)` with the same `serverVersion`, so a startup error like a `minServerVersion` mismatch became an infinite loop with Quit as the only out (or a 5-second window to click "Change data directory…" in the loading state on the next launch). A new middle button now routes back to the directory chooser via the existing `showDirectoryChooser` IPC, letting users pick a different server version, runtime, or instance without quitting.
+
+### Maintenance
+
+- **Electron 40 → 41.7.0**: Chromium 144 → 146, V8 ABI 143 → 145, Node runtime unchanged at 24.15.0. Native modules (`better-sqlite3-multiple-ciphers`, `sharp`) rebuilt against the new ABI. Electron 42 was attempted first but blocked by a V8 `ExternalPointerTypeTag` change that `better-sqlite3-multiple-ciphers@12.9.0` has not yet picked up (upstream `better-sqlite3` already shipped the fix in 12.10.0); revisit when the fork catches up.
+- **TypeScript 5.7 → 6.0.3**: Major bump. `electron/tsconfig.json` migrated `module` and `moduleResolution` from `"commonjs"` / `"node"` to `"node16"` / `"node16"`, since the `"node"` resolver was deprecated in TypeScript 6 and is scheduled for removal in 7. Emit remains CommonJS (the package has no `"type": "module"`) and compiled output is shape-identical to the previous build.
+- **cross-env 7.0.3 → 10.1.0**: The package went ESM-only in 10.x, but we only invoke it as a CLI binary in the `electron:dev` script, so module format is irrelevant. Its engine floor of Node ≥ 20 sits well below our `engines.node` requirement of `>=22`.
+- **Other refreshed dependencies**: `better-sqlite3-multiple-ciphers` 12.8 → 12.9, `tar` 7.5.13 → 7.5.15, `yauzl` 3.2.1 → 3.3.1, `@electron/rebuild` 4.0.3 → 4.0.4.
+
 ## 4.1.4
 
 ### Features
