@@ -2,6 +2,7 @@ import { autoUpdater, UpdateInfo } from 'electron-updater';
 import { BrowserWindow, dialog } from 'electron';
 import { APP_VERSION } from './constants';
 import { AppSettings, saveSettings } from './settings';
+import { compareVersions } from './version-compare';
 
 /**
  * Manages automatic updates for the Quilltap Launcher (the Electron shell itself).
@@ -63,8 +64,12 @@ export class ShellUpdater {
       const available = result.updateInfo;
       const newVersion = available.version;
 
-      // Already running this version (or newer somehow)
-      if (newVersion === APP_VERSION) {
+      // Already running this version or newer. electron-updater will log
+      // "downgrade is disallowed" in this case but still returns updateInfo,
+      // so we must guard the prompt ourselves — otherwise running e.g. 4.1.10
+      // against a latest release of 4.1.9 prompts the user to "upgrade"
+      // backwards.
+      if (compareVersions(newVersion, APP_VERSION) <= 0) {
         this.scheduleRetry(parentWindow);
         return;
       }
@@ -98,7 +103,8 @@ export class ShellUpdater {
 
     try {
       const result = await autoUpdater.checkForUpdates();
-      if (!result || !result.updateInfo || result.updateInfo.version === APP_VERSION) {
+      if (!result || !result.updateInfo
+          || compareVersions(result.updateInfo.version, APP_VERSION) <= 0) {
         await this.showInfoDialog(parentWindow,
           `You are running the latest version (v${APP_VERSION}).`);
         return;
@@ -138,8 +144,13 @@ export class ShellUpdater {
 
   private async promptUser(info: UpdateInfo, parentWindow: BrowserWindow | null): Promise<void> {
     const version = info.version;
+    // electron-updater fetches the GitHub release body as Markdown and runs it
+    // through marked() before exposing it as a string, so what arrives here is
+    // HTML. Native dialog.showMessageBox does not render HTML, which left raw
+    // <p>/<ul>/<li>/<code> tags showing up in the dialog. Strip tags and
+    // decode the few entities that turn up in our release bodies.
     const releaseNotes = typeof info.releaseNotes === 'string'
-      ? info.releaseNotes
+      ? stripHtml(info.releaseNotes).trim() || undefined
       : undefined;
 
     const message = `A new Quilltap Launcher version is available: v${version}\n\n` +
@@ -273,4 +284,26 @@ export class ShellUpdater {
       }
     }
   }
+}
+
+/**
+ * Convert the HTML that electron-updater hands back as release notes into
+ * plain text suitable for a native dialog. Replaces block-level closing tags
+ * with newlines and list items with bullets so the result is readable rather
+ * than a wall of run-on text, then strips remaining tags and decodes the
+ * handful of named entities that appear in our release bodies.
+ */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<li[^>]*>/gi, '\n• ')
+    .replace(/<\/(p|h[1-6]|li|ul|ol|div|blockquote|pre)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n');
 }

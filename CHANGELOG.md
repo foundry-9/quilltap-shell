@@ -1,5 +1,12 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.10
+
+### Fixes
+
+- **Unsigned macOS builds, take two — now with feeling**: 4.1.9 set `mac.identity` to `-` and trusted electron-builder (via `@electron/osx-sign`) to ad-hoc sign every nested binary in the bundle. It dutifully reported `signing file=Quilltap.app … identityName=-`, and `codesign --verify --deep --strict` afterwards gave its blessing. Yet macOS 26.5 dyld still refused to map the Electron Framework, insisting with the patient repetition of a maître d' explaining the dress code that the outer process and the framework had "different Team IDs" — despite both reading `TeamIdentifier=not set`. Running `codesign --force --deep --sign -` manually on the installed bundle, however, produced a launchable app, which is the kind of empirical contradiction that drives one to the kind of long stiff drink the Roaring Twenties were named for. The fix is an `afterSign` hook (`electron/notarize.js`) that detects the unsigned-fallback path via `CSC_IDENTITY_AUTO_DISCOVERY=false` and runs that very `codesign --force --deep --sign -` over the bundle before electron-builder packages the `.dmg` and `.zip`. The signed Developer ID path is untouched; users on 4.1.9 can rescue the local install with the same incantation prefixed by `sudo` against `/Applications/Quilltap.app`.
+- **Launcher auto-updater no longer prompts you to travel backwards in time**: `ShellUpdater.checkForUpdates` compared the latest version to the running one with strict string equality — `newVersion === APP_VERSION` — so a machine running 4.1.10 against a latest GitHub release of 4.1.9 sailed straight past the "already up to date" guard and was politely asked whether it would care to install the older one. The check now defers to a shared `compareVersions` helper (lifted out of `main.ts` into `electron/version-compare.ts` so the launcher and the server-version code consult the same oracle), and bails when the supposedly newer version is in fact equal or older. As a bonus, the update prompt no longer displays the GitHub release body as a wall of bare `<p>` and `<li>` tags: electron-updater renders the Markdown to HTML before handing it back, and the native message box does not render HTML, so a small `stripHtml` step now turns the tags into plain text with bullet points before the dialog ever sees them.
+
 ## 4.1.9
 
 ### Fixes

@@ -91,11 +91,16 @@ function runElectronBuilder(signed: boolean): number {
 
   const args = [`--${platform}`, '--publish', 'never'];
   if (!signed && platform === 'mac') {
-    // Ad-hoc sign the bundle. Without this electron-builder leaves the outer
-    // Quilltap binary unsigned while the bundled Electron Framework keeps its
-    // upstream signature, and macOS 15+ refuses to map them together (Team ID
-    // mismatch). `-` is codesign's ad-hoc identity, which re-signs every
-    // nested Mach-O with an empty Team ID so they all match.
+    // Tell electron-builder to sign with the ad-hoc identity rather than
+    // logging "no identity found" and falling through to its own fallback.
+    // Note: this alone is NOT sufficient — electron-builder's pass (via
+    // @electron/osx-sign) leaves the nested Electron Framework in a state
+    // codesign --verify --deep --strict accepts but macOS 15+ dyld rejects
+    // with "non-platform have different Team IDs". The actual harmonizing
+    // step is in electron/notarize.js (the afterSign hook), which detects
+    // this code path via CSC_IDENTITY_AUTO_DISCOVERY=false and runs
+    // `codesign --force --deep --sign -` over the whole bundle before
+    // electron-builder produces the .dmg / .zip artifacts.
     args.push('-c.mac.identity=-');
   }
   console.log(`Running: npx electron-builder ${args.join(' ')} (signed=${signed})`);
