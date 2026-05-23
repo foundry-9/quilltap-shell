@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.4
+
+### Features
+
+- **Release workflow steps are now scripts**: Every meaningful step in `.github/workflows/release.yml` now delegates to a TypeScript script under `scripts/release/`, so the same logic that runs in CI can be invoked locally for troubleshooting. New scripts cover tag validation, macOS keychain bootstrap and teardown, Apple API key file management, electron-builder invocation per platform, prerelease/production detection, and `gh release create` assembly. Each script reads inputs from env vars and writes step outputs to `$GITHUB_ENV` / `$GITHUB_OUTPUT` when those are present, falling back to console output locally; `create-github-release.ts` additionally supports `--dry-run` and a configurable `ARTIFACTS_DIR` so the publish step can be rehearsed against a folder of downloaded artifacts.
+
 ## 4.1.3
 
 ### Fixes
