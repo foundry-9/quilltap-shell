@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.9
+
+### Fixes
+
+- **Unsigned macOS builds now leave the door open**: The unsigned fallback added in 4.1.6 produced a `Quilltap.app` whose outer Mach-O carried no Team ID at all while the bundled `Electron Framework.framework` retained its upstream signature — a mixed-pedigree arrangement that macOS 15 and 26 regard with the same dim view a country-house butler reserves for guests arriving in mismatched footwear. The kernel's dyld linker refused to map the framework with "non-platform have different Team IDs" and the app crashed at launch before the splash screen could so much as clear its throat. `scripts/release/build-electron.ts` now passes `-c.mac.identity=-` to electron-builder on the fallback path, instructing it to ad-hoc sign every nested binary so the entire bundle agrees, in chorus, that it has no Team ID whatsoever. Users running an existing 4.1.7 install can rescue the bundle locally with `sudo codesign --force --deep --sign - /Applications/Quilltap.app`; future unsigned releases will load without ceremony.
+
 ## 4.1.8
 
 ### Fixes

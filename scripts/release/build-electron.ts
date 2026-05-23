@@ -9,9 +9,14 @@
  *     first attempt runs with signing enabled.
  *   - If that attempt fails (or credentials are absent on a platform that
  *     normally signs), `out/` is wiped and electron-builder is re-run with
- *     signing disabled. The resulting installer files are renamed to insert
- *     `-unsigned` before the extension, and any update-feed YAML (latest-*.yml)
- *     is patched in place to reference the new filenames.
+ *     signing disabled. On macOS the fallback also passes
+ *     `-c.mac.identity=-` so electron-builder ad-hoc signs the bundle; this
+ *     harmonizes the Team IDs of the outer app and the bundled Electron
+ *     Framework (both end up empty), without which macOS 15+ refuses to load
+ *     the framework with "different Team IDs". The resulting installer files
+ *     are renamed to insert `-unsigned` before the extension, and any
+ *     update-feed YAML (latest-*.yml) is patched in place to reference the new
+ *     filenames.
  *   - The script only exits non-zero when neither attempt produced installers.
  *
  * The macOS build additionally injects `NODE_OPTIONS=-r ./electron/patch-fs.js`
@@ -85,6 +90,14 @@ function runElectronBuilder(signed: boolean): number {
   }
 
   const args = [`--${platform}`, '--publish', 'never'];
+  if (!signed && platform === 'mac') {
+    // Ad-hoc sign the bundle. Without this electron-builder leaves the outer
+    // Quilltap binary unsigned while the bundled Electron Framework keeps its
+    // upstream signature, and macOS 15+ refuses to map them together (Team ID
+    // mismatch). `-` is codesign's ad-hoc identity, which re-signs every
+    // nested Mach-O with an empty Team ID so they all match.
+    args.push('-c.mac.identity=-');
+  }
   console.log(`Running: npx electron-builder ${args.join(' ')} (signed=${signed})`);
   // On Windows, `npx` is `npx.cmd`; Node's `spawn` won't resolve `.cmd` shims
   // without `shell: true`, so without this the process fails with ENOENT and
