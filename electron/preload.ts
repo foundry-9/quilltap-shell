@@ -69,4 +69,15 @@ contextBridge.exposeInMainWorld('quilltap', {
   /** Explicitly apply quarantine markers to a workspace file */
   applyQuarantine: (filePath: string): Promise<boolean> =>
     ipcRenderer.invoke('workspace:apply-quarantine', filePath),
+
+  // --- Spellcheck ---
+  /** Replace the Quilltap-managed dictionary with the given words (diff applied internally) */
+  setDictionaryWords: (words: string[]): Promise<void> =>
+    ipcRenderer.invoke('spellcheck:set-dictionary-words', words),
+  /** Set the spellchecker language list (invalid codes are silently dropped with a warning) */
+  setSpellCheckerLanguages: (codes: string[]): Promise<void> =>
+    ipcRenderer.invoke('spellcheck:set-languages', codes),
+  /** Inspect the current spellchecker state */
+  getSpellCheckerStatus: (): Promise<{ enabled: boolean; languages: string[]; availableLanguages: string[] }> =>
+    ipcRenderer.invoke('spellcheck:get-status'),
 });

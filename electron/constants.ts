@@ -178,7 +178,7 @@ export const APP_VERSION = (() => {
  * the shell gains functionality the server needs to know about (e.g.
  * "OPENS_FS_PATH", "DOWNLOADS_FILE").
  */
-export const SHELL_CAPABILITIES = '';
+export const SHELL_CAPABILITIES = 'SPELLCHECK_DICTIONARY';
 
 /** Default rootfs download URL — GitHub Releases asset for current version */
 export const DEFAULT_ROOTFS_URL = APP_VERSION

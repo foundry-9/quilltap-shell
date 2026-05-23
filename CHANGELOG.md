@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.7
+
+### Features
+
+- **Spellcheck bridge for the renderer**: Three new `window.quilltap` methods — `setDictionaryWords`, `setSpellCheckerLanguages`, `getSpellCheckerStatus` — let the Quilltap server feed character names and other invented vocabulary into Chromium's persistent dictionary. The shell tracks its own additions in `<userData>/quilltap-managed-dict.json` and applies diffs on each push, so renamed or deleted nouns actually leave the dictionary instead of accreting forever (user-added words via the context menu are unaffected). The main window gains a right-click context menu with spell suggestions, "Add to dictionary", standard cut/copy/paste/select-all on editable surfaces, copy on selections, and an "Inspect Element" item in dev builds. The shell advertises the new `SPELLCHECK_DICTIONARY` capability to the server via `QUILLTAP_SHELL_CAPABILITIES`; renderers without the bridge fall back cleanly to plain browser spellcheck with no dictionary feed.
+
 ## 4.1.6
 
 ### Features

@@ -32,6 +32,7 @@ import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 import { initStartupLog, logStartup, closeStartupLog } from './startup-log';
 import { WorkspaceWatcher } from './workspace-watcher';
 import { ShellUpdater } from './shell-updater';
+import * as spellcheck from './spellcheck-manager';
 
 app.name = 'Quilltap';
 
@@ -806,6 +807,52 @@ function createMainWindow(urlPath?: string): BrowserWindow {
   if (saved?.isMaximized) {
     win.maximize();
   }
+
+  // Right-click context menu — spell suggestions, edit actions, and (in dev) Inspect Element
+  win.webContents.on('context-menu', (_event, params) => {
+    const template: Electron.MenuItemConstructorOptions[] = [];
+
+    if (params.misspelledWord) {
+      const suggestions = params.dictionarySuggestions.slice(0, 5);
+      if (suggestions.length === 0) {
+        template.push({ label: 'No suggestions', enabled: false });
+      } else {
+        for (const suggestion of suggestions) {
+          template.push({
+            label: suggestion,
+            click: () => win.webContents.replaceMisspelling(suggestion),
+          });
+        }
+      }
+      template.push({ type: 'separator' });
+      template.push({
+        label: `Add "${params.misspelledWord}" to dictionary`,
+        click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    if (params.isEditable) {
+      template.push({ role: 'cut', enabled: params.editFlags.canCut });
+      template.push({ role: 'copy', enabled: params.editFlags.canCopy });
+      template.push({ role: 'paste', enabled: params.editFlags.canPaste });
+      template.push({ type: 'separator' });
+      template.push({ role: 'selectAll' });
+    } else if (params.selectionText) {
+      template.push({ role: 'copy' });
+    }
+
+    if (isDev) {
+      if (template.length > 0) template.push({ type: 'separator' });
+      template.push({
+        label: 'Inspect Element',
+        click: () => win.webContents.inspectElement(params.x, params.y),
+      });
+    }
+
+    if (template.length === 0) return;
+    Menu.buildFromTemplate(template).popup({ window: win });
+  });
 
   // Persist bounds on resize, move, maximize, and unmaximize
   let boundsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2097,6 +2144,28 @@ ipcMain.handle('app:copy-image-to-clipboard', (_event, dataUrl: string) => {
   const image = nativeImage.createFromDataURL(dataUrl);
   clipboard.writeImage(image);
   return true;
+});
+
+// --- Spellcheck ---
+
+/** Replace the Quilltap-managed dictionary set with the given words (diff applied internally) */
+ipcMain.handle('spellcheck:set-dictionary-words', (_event, words: string[]) => {
+  if (!Array.isArray(words)) throw new Error('words must be an array of strings');
+  if (!mainWindow) throw new Error('Main window is not open');
+  spellcheck.applyDictionaryWords(mainWindow.webContents.session, words);
+});
+
+/** Set the spellchecker language list (invalid codes are dropped with a warning) */
+ipcMain.handle('spellcheck:set-languages', (_event, codes: string[]) => {
+  if (!Array.isArray(codes)) throw new Error('codes must be an array of strings');
+  if (!mainWindow) throw new Error('Main window is not open');
+  spellcheck.setLanguages(mainWindow.webContents.session, codes);
+});
+
+/** Inspect the current spellchecker state */
+ipcMain.handle('spellcheck:get-status', () => {
+  if (!mainWindow) throw new Error('Main window is not open');
+  return spellcheck.getStatus(mainWindow.webContents.session);
 });
 
 /** Create a small, frameless window showing a shutdown message */
