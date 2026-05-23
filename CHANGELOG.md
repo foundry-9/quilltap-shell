@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.6
+
+### Features
+
+- **Release workflow falls back to unsigned installers**: `scripts/release/build-electron.ts` now detects per-platform signing credentials (mac: `CSC_LINK` + `CSC_KEY_PASSWORD` + Apple API key vars; win: Azure Trusted Signing trio; linux: never signs). When credentials are present it attempts a signed build first; on failure it wipes `out/`, re-runs electron-builder with signing disabled, and renames the resulting `.dmg` / `.zip` / `.exe` files to insert `-unsigned` before the extension. `latest-mac.yml` / `latest.yml` are patched in place so the auto-updater feed references the renamed filenames. `create-github-release.ts` now treats all three platforms as required — the release fails with a clear list of missing platforms if any produced zero installers — and prepends a flavored notice to the release body whenever any `-unsigned` artifact is present, explaining how to coax macOS Gatekeeper and Windows SmartScreen past the velvet rope. The workflow's `create-release` gate is now `if: !cancelled()`, deferring sufficiency to the script; `continue-on-error: true` was removed from the Windows job now that Windows contributes to release viability the same as the other platforms.
+
 ## 4.1.5
 
 ### Features

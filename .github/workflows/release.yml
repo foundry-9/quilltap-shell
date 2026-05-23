@@ -109,7 +109,6 @@ jobs:
     name: Build Electron (Windows)
     runs-on: windows-latest
     needs: validate-tag
-    continue-on-error: true
 
     steps:
       - name: Checkout code
@@ -190,7 +189,10 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [build-electron-mac, build-electron-win, build-electron-linux]
-    if: ${{ !cancelled() && needs.build-electron-mac.result == 'success' && needs.build-electron-linux.result == 'success' }}
+    # Run as long as the workflow wasn't cancelled. create-github-release.ts
+    # decides whether the collected artifacts are sufficient — every platform
+    # must contribute at least one installer (signed or unsigned).
+    if: ${{ !cancelled() }}
 
     steps:
       - name: Checkout code

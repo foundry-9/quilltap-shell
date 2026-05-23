@@ -3,10 +3,14 @@
  * Assemble the release body, collect built artifacts, and create the GitHub
  * release via `gh release create`.
  *
- * Behaviour matches the inline workflow step it replaces:
- *   - Windows artifacts are optional. If electron-builder for Windows failed,
- *     the release is created without the Windows installer (a warning is logged).
- *   - macOS and Linux artifacts are required.
+ * Artifact requirements:
+ *   - All three platforms (macOS, Windows, Linux) must contribute at least one
+ *     installer — signed or unsigned. A platform with zero installers fails
+ *     the release. Signed and unsigned installers are produced by the same
+ *     workflow step (see build-electron.ts); unsigned files carry an
+ *     `-unsigned` suffix before their extension.
+ *   - If any unsigned artifact is present, a notice is prepended to the
+ *     release body.
  *
  * Reads:
  *   tag             from first CLI arg or $GITHUB_REF_NAME
@@ -28,9 +32,7 @@
 import { spawnSync } from 'child_process';
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
-
-import { warn } from './_lib';
+import { basename, join } from 'path';
 
 const RELEASE_BODY = `## Installation
 
@@ -91,23 +93,55 @@ const winAssets = [
   ...glob(winDir, (n) => n === 'latest.yml'),
 ];
 
-if (macAssets.length === 0) {
-  console.error(`Error: no macOS artifacts found in ${macDir}`);
+const missing: string[] = [];
+if (macAssets.length === 0) missing.push(`macOS (${macDir})`);
+if (winAssets.length === 0) missing.push(`Windows (${winDir})`);
+if (linuxAssets.length === 0) missing.push(`Linux (${linuxDir})`);
+if (missing.length > 0) {
+  console.error('Error: no installers were produced for the following platform(s):');
+  for (const m of missing) console.error(`  - ${m}`);
+  console.error('Every platform must produce at least one installer (signed or unsigned) for the release to proceed.');
   process.exit(1);
-}
-if (linuxAssets.length === 0) {
-  console.error(`Error: no Linux artifacts found in ${linuxDir}`);
-  process.exit(1);
-}
-if (winAssets.length === 0) {
-  warn('Windows Electron build was not available — releasing without Windows installer');
 }
 
 const assets = [...macAssets, ...linuxAssets, ...winAssets];
 
+function isUnsigned(filePath: string): boolean {
+  return /-unsigned\.[^./]+$/.test(basename(filePath));
+}
+
+const unsignedPlatforms: string[] = [];
+if (macAssets.some(isUnsigned)) unsignedPlatforms.push('macOS');
+if (winAssets.some(isUnsigned)) unsignedPlatforms.push('Windows');
+if (linuxAssets.some(isUnsigned)) unsignedPlatforms.push('Linux');
+
+const UNSIGNED_NOTICE = (platforms: string[]): string => `## A Word of Caution, Old Sport
+
+This release arrives bearing one or more installers that, owing to the
+misadventures of our code-signing apparatus, we were unable to dress in the
+proper signed regalia. The files in question wear an \`-unsigned\` suffix
+upon their lapel, plain as the day is long.
+
+They are entirely functional, but your operating system — ever the
+discerning doorman — may eye them with the suspicion reserved for an
+uninvited guest at a Long Island garden party. To wave them past the
+velvet rope:
+
+- **macOS:** right-click the \`.dmg\` and select **Open**, then humour the dialogue. Or run \`xattr -d com.apple.quarantine /Applications/Quilltap.app\` after installing.
+- **Windows:** SmartScreen will likely protest. Click **More info**, then **Run anyway**.
+
+Platforms affected: ${platforms.join(', ')}.
+
+---
+
+`;
+
 const bodyDir = mkdtempSync(join(tmpdir(), 'release-body-'));
 const bodyFile = join(bodyDir, 'release-body.md');
-writeFileSync(bodyFile, RELEASE_BODY);
+const body = unsignedPlatforms.length > 0
+  ? UNSIGNED_NOTICE(unsignedPlatforms) + RELEASE_BODY
+  : RELEASE_BODY;
+writeFileSync(bodyFile, body);
 
 const ghArgs = [
   'release', 'create', tag,
