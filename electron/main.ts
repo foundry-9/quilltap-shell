@@ -1624,6 +1624,16 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
     // Non-fatal — server may still work without some native modules
   }
 
+  // Step 2c: Reconcile node-pty's spawn-helper. It is a separate build artifact
+  // the tarball ships but node-pty's loader can fail to find (or find without
+  // its exec bit), causing `posix_spawnp failed` when a PTY is spawned.
+  try {
+    standaloneManager.reconcileNodePtyHelper();
+  } catch (err) {
+    console.warn('[Main] node-pty helper reconciliation warning:', err);
+    // Non-fatal — only the in-app terminal feature would be affected
+  }
+
   // Step 3: Start the embedded server
   sendSplashUpdate({
     phase: 'starting-server',

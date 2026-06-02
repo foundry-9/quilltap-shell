@@ -308,6 +308,73 @@ export class StandaloneDownloadManager {
     }
   }
 
+  /**
+   * Reconcile node-pty's spawn-helper executable in the extracted standalone tree.
+   *
+   * node-pty ships two build artifacts: the `pty.node` addon and a separate
+   * `spawn-helper` executable. Its loader prefers `build/Release/` over
+   * `prebuilds/`, so when the tarball ships `build/Release/pty.node` it then
+   * looks for `build/Release/spawn-helper` next to it — which the server build
+   * does not always emit there — and a missing or non-executable helper yields
+   * `posix_spawnp failed` when a PTY is spawned. Two failure modes are handled:
+   *
+   *   (a) tar extraction drops the exec bit on the shipped `prebuilds/*` helpers;
+   *   (b) `build/Release/spawn-helper` is absent beside `build/Release/pty.node`.
+   *
+   * The helper is a plain executable with no Node linkage, so it is ABI-
+   * independent: the matching-platform prebuilt copy runs fine regardless of
+   * which Node ABI `pty.node` was built against. Windows uses ConPTY and has no
+   * helper, so this is a no-op there. Idempotent and non-fatal by design, it
+   * runs on every embedded boot so a previously-extracted cache self-heals too.
+   */
+  reconcileNodePtyHelper(): void {
+    // Windows uses ConPTY — there is no spawn-helper to reconcile.
+    if (process.platform === 'win32') return;
+
+    const ptyDir = path.join(this.cacheDir, 'node_modules', 'node-pty');
+    const prebuildsDir = path.join(ptyDir, 'prebuilds');
+
+    // Server versions without node-pty (or a not-yet-extracted cache): nothing to do.
+    if (!fs.existsSync(prebuildsDir)) return;
+
+    // (a) Restore the exec bit on every shipped prebuild helper (tar drops it).
+    let prebuildDirs: string[] = [];
+    try {
+      prebuildDirs = fs.readdirSync(prebuildsDir);
+    } catch {
+      return;
+    }
+    for (const dir of prebuildDirs) {
+      const helper = path.join(prebuildsDir, dir, 'spawn-helper');
+      try {
+        if (fs.existsSync(helper)) fs.chmodSync(helper, 0o755);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[StandaloneDownloadManager] Could not chmod prebuilds/${dir}/spawn-helper: ${msg}`);
+      }
+    }
+
+    // (b) Backfill build/Release/spawn-helper beside a shipped build/Release/pty.node.
+    const builtAddon = path.join(ptyDir, 'build', 'Release', 'pty.node');
+    const builtHelper = path.join(ptyDir, 'build', 'Release', 'spawn-helper');
+    if (fs.existsSync(builtAddon) && !fs.existsSync(builtHelper)) {
+      const key = `${process.platform}-${process.arch}`; // e.g. darwin-arm64
+      const prebuiltHelper = path.join(prebuildsDir, key, 'spawn-helper');
+      if (fs.existsSync(prebuiltHelper)) {
+        try {
+          fs.copyFileSync(prebuiltHelper, builtHelper);
+          fs.chmodSync(builtHelper, 0o755);
+          console.log('[StandaloneDownloadManager] Backfilled node-pty build/Release/spawn-helper');
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`[StandaloneDownloadManager] Could not backfill node-pty spawn-helper: ${msg}`);
+        }
+      } else {
+        console.warn(`[StandaloneDownloadManager] node-pty prebuilt helper missing for ${key}; cannot backfill build/Release/spawn-helper`);
+      }
+    }
+  }
+
   // --- Private helpers ---
 
   /**

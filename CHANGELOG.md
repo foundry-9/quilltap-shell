@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.11
+
+### Fixes
+
+- **The in-app terminal stops slamming the door on `posix_spawnp`**: node-pty, unlike its better-behaved native cousins, travels with two pieces of luggage — the `pty.node` addon and a separate `spawn-helper` executable — and its loader, presented with both `build/Release/` and `prebuilds/`, invariably reaches for `build/Release/` first. The standalone tarball duly ships `build/Release/pty.node` but not always a `spawn-helper` to keep it company, and `tar` extraction strips the exec bit off the `prebuilds/*/spawn-helper` copies on its way out the door — so the very moment the server tried to open a PTY it was rebuffed with `posix_spawnp failed`, the digital equivalent of a footman who has mislaid the key to the servants' entrance. A new `reconcileNodePtyHelper()` step in `standalone-download-manager.ts`, run on every embedded boot just after the native modules are linked, restores the exec bit on each shipped prebuild helper and, when `build/Release/pty.node` finds itself without a `spawn-helper`, copies the matching host-architecture prebuild into place and marks it executable. The helper is a plain binary with no Node linkage, so the prebuilt copy runs regardless of which ABI `pty.node` was compiled against; Windows, which uses ConPTY and keeps no such helper, is left entirely to its own devices. This is the launcher's half of a belt-and-suspenders arrangement with the server's own boot-time self-heal — either alone closes the bug, and both together close it twice for good measure.
+
 ## 4.1.10
 
 ### Fixes
