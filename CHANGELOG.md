@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.12
+
+### Fixes
+
+- **better-sqlite3 stops turning up in the wrong evening wear**: Every Electron-41 release since 4.1.5 shipped a `better_sqlite3.node` compiled against the wrong Node ABI, so the embedded server greeted first launch not with a workspace but with "sqlite not accessible — cannot run migrations" and a terse note that the module wanted `NODE_MODULE_VERSION 145` while this one had dressed for `127`. The culprit was a matter of running order in `scripts/rebuild-native-modules.ts`: Step 1 dutifully recompiled better-sqlite3 against Electron's headers (the correct 145), whereupon Step 2 — installing sharp's platform binaries via `npm install --no-save --no-package-lock` — quietly re-resolved the entire dependency tree and reinstalled better-sqlite3 from its plain-Node prebuild (127), painting over the fresh coat before it had dried. Because `npmRebuild: false` keeps electron-builder from rebuilding anything itself, and nothing thought to check, the mismatched binary sailed into the `.dmg`, `.exe`, and `.AppImage` alike and out to every user. The script now installs sharp **first** and compiles better-sqlite3 **last**, so node-gyp always has the last word; and a new ABI guard loads the freshly built module under Electron in `ELECTRON_RUN_AS_NODE` mode before packaging, halting the build with an indignant flourish should a plain-Node prebuild ever again attempt to gatecrash an Electron soirée. Anyone on 4.1.11 or earlier need only install 4.1.12 — the shell recopies the corrected binary into its cache on the next launch.
+
 ## 4.1.11
 
 ### Fixes
