@@ -1,5 +1,15 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.13
+
+### Fixes
+
+- **sharp now arrives in the same vintage the server ordered**: The shell, ever the officious valet, force-copies its own `sharp`, `better-sqlite3`, and `@img/*` packages over whatever the standalone server tarball brought with it (`standalone-download-manager.ts`, on every extraction, no exceptions entertained) — which means the versions in the shell's wardrobe are the versions the embedded server actually wears. The server has been dressed for `sharp ^0.35.3` for some time, yet the shell kept pressing its old 0.34.5 upon it — a substitution nobody noticed because sharp's N-API binaries load politely regardless, the way a guest will wear the borrowed jacket rather than make a scene. The old vintage also carried four high-severity libvips CVEs, so this was less a fashion crime than a matter for the constabulary. The shell now stocks `sharp ^0.35.3` to match, and — so this particular mix-up never slips past the door again — a new `scripts/check-server-alignment.ts` guard runs at the head of every platform build, comparing the shell's installed copies of each injected module against the ranges declared in the quilltap-server repo (located via `QUILLTAP_SERVER_DIR` or the sibling checkout; absent both, it tips its hat and stands aside rather than halting builds on machines without the server sources). A mismatch stops the presses with instructions; `npm audit` now reports a spotless zero.
+
+### Maintenance
+
+- **Dependency refresh, all within their appointed ranges**: `electron` 41.7.0 → 41.10.5, `electron-builder` 26.8.1 → 26.15.3 (the ad-hoc deep-resign hook from 4.1.10 verified still on speaking terms with it), `electron-updater` 6.8.3 → 6.8.9, `@electron/rebuild` 4.0.4 → 4.2.0 (the 4.1.12 ABI guard confirmed the rebuilt `better_sqlite3.node` still loads under Electron at `NODE_MODULE_VERSION 145`), `better-sqlite3-multiple-ciphers` 12.9.0 → 12.11.1, `tar` 7.5.15 → 7.5.22, `yauzl` 3.3.1 → 3.4.0. `semver` (with types) joins the devDependencies honestly, having previously loitered in the tree as sharp's transitive guest, since the new alignment guard imports it by name. Of particular note: `better-sqlite3-multiple-ciphers` 12.11.1 clears the 12.10.0 threshold that had barred the door to Electron 42+ (the V8 `ExternalPointerTypeTag` affair chronicled in 4.1.5), so an Electron 43 bump is now feasible and merely awaits its own verification pass.
+
 ## 4.1.12
 
 ### Fixes
