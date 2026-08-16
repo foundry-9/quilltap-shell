@@ -388,25 +388,67 @@ export class StandaloneDownloadManager {
    * to app.asar.unpacked/. We prefer the unpacked path when it exists
    * (it has the real native binaries), falling back to the asar path
    * (which works for pure-JS modules via Electron's fs patching).
+   *
+   * Resolution cannot go through `require.resolve(name + '/package.json')`
+   * alone: packages with a restrictive `exports` map that omits
+   * `./package.json` (sharp does so from 0.35.0 onward) make that throw
+   * ERR_PACKAGE_PATH_NOT_EXPORTED, which silently skipped the injection and
+   * left the server with the tarball's binary-less sharp. We therefore locate
+   * the package directory on disk via the module resolution paths, and only
+   * fall back to require.resolve for layouts those paths don't cover.
    */
   private resolveModuleDir(moduleName: string): string | null {
-    try {
-      const pkgJson = require.resolve(moduleName + '/package.json');
-      let dir = path.dirname(pkgJson);
+    const dir = this.findPackageDir(moduleName);
+    if (!dir) return null;
 
-      // In packaged builds, check if an unpacked version exists (native modules)
-      if (dir.includes('app.asar' + path.sep)) {
-        const unpackedDir = dir.replace(/app\.asar([\/\\])/, 'app.asar.unpacked$1');
-        try {
-          fs.accessSync(path.join(unpackedDir, 'package.json'));
-          return unpackedDir;
-        } catch {
-          // No unpacked version — use asar path (Electron fs can read it for copying)
-          return dir;
-        }
+    // In packaged builds, check if an unpacked version exists (native modules)
+    if (dir.includes('app.asar' + path.sep)) {
+      const unpackedDir = dir.replace(/app\.asar([\/\\])/, 'app.asar.unpacked$1');
+      try {
+        fs.accessSync(path.join(unpackedDir, 'package.json'));
+        return unpackedDir;
+      } catch {
+        // No unpacked version — use asar path (Electron fs can read it for copying)
+        return dir;
       }
+    }
 
-      return dir;
+    return dir;
+  }
+
+  /**
+   * Locate a package's directory without consulting its `exports` map.
+   *
+   * Walks the same candidate node_modules directories Node would search and
+   * returns the first one containing the package's package.json. Falls back to
+   * resolving the package entry point and climbing to its package root for
+   * layouts require.resolve.paths() doesn't enumerate.
+   */
+  private findPackageDir(moduleName: string): string | null {
+    const candidates = require.resolve.paths(moduleName) ?? [];
+    for (const base of candidates) {
+      const dir = path.join(base, ...moduleName.split('/'));
+      try {
+        fs.accessSync(path.join(dir, 'package.json'));
+        return dir;
+      } catch {
+        // Not here — keep looking
+      }
+    }
+
+    try {
+      let dir = path.dirname(require.resolve(moduleName));
+      // Climb until the package.json we find is the package's own
+      while (true) {
+        const candidate = path.join(dir, 'package.json');
+        if (fs.existsSync(candidate)) {
+          const name = JSON.parse(fs.readFileSync(candidate, 'utf-8')).name;
+          if (name === moduleName) return dir;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) return null;
+        dir = parent;
+      }
     } catch {
       return null;
     }

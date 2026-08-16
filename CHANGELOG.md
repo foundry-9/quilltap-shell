@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.14
+
+### Fixes
+
+- **sharp's new footman refuses to announce himself, so the shell stops asking**: The very same 4.1.13 bump that dressed `sharp` in its proper 0.35.3 vintage also, with the exquisite timing of a farce, rendered it invisible to the shell's own valet. `resolveModuleDir()` in `standalone-download-manager.ts` located each injected module by asking `require.resolve()` for its `package.json` — a perfectly civil enquiry that sharp entertained without complaint through 0.34.5, which carried no `exports` map at all. From 0.35.0 onward sharp keeps a strict `exports` map that lists only its entry points and pointedly omits `./package.json`, so the enquiry now returns not an address but `ERR_PACKAGE_PATH_NOT_EXPORTED` — whereupon the resolver's `catch` returned `null`, `copyModule()` shrugged at the `null` and returned early, and the `@img/*` loop, which hangs its entire existence on that same resolved path, never ran at all. The upshot: the embedded server was left wearing whatever `sharp` the standalone tarball had brought — the JavaScript without a single platform binary to its name — and greeted first launch with `Could not load the "sharp" module using the darwin-arm64 runtime`, followed immediately by `HTTP server closed`, which is the sound of a fatal initialization error being politely shown out the back while the front door reports everything perfectly in order. Resolution no longer consults the `exports` map: a new `findPackageDir()` walks the same candidate `node_modules` directories Node itself would search and takes the first that holds the package's `package.json`, falling back to resolving the entry point and climbing to its package root for layouts those candidates do not enumerate. `better-sqlite3` and `@img/colour` resolve exactly as before; `sharp`, `@img/sharp-darwin-arm64`, and `@img/sharp-libvips-darwin-arm64` — all three of which keep the same reticent `exports` map — now resolve where previously they returned `null`. Because `linkNativeModules()` runs on every embedded boot and not merely after a download, an existing broken cache heals itself the moment 4.1.14 launches; no cache-clearing incantation is required.
+
 ## 4.1.13
 
 ### Fixes
