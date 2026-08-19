@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.1.15
+
+### Fixes
+
+- **The Docker backend stops keeping Greenwich hours**: Every other way the shell knows how to start a server — embedded, WSL2, Lima — has long taken care to hand the backend the host's own timezone, and every one of them did so while the Docker path stood quietly to one side, handing over nothing at all. A container inherits no clock from its host, so the server inside it dutifully assumed UTC: timestamps in the wrong hour, "today" and "yesterday" recall windows swinging over at the wrong midnight, autonomous-room budgets rolling over five or six hours early, and scheduled jobs firing at times nobody had asked for. `startContainer()` in `docker-manager.ts` now detects the host zone via `Intl` and passes it in, guarding the value as the server's own `start-quilltap-docker.ts` does — only `UTC` or a proper `Area/Location` name is forwarded, since an abbreviation such as `CDT` would be silently discarded by the container's ICU and land right back on UTC, which is precisely the affliction being cured. Better to pass nothing than to pass a lie. Both `QUILLTAP_TIMEZONE` (which governs timestamp formatting) and `TZ` (which governs Node's own system-local clock) are set to the same value: the server's entrypoint has mirrored one onto the other since August, but older images predate that courtesy, and setting the pair explicitly spares them the confusion.
+
 ## 4.1.14
 
 ### Fixes

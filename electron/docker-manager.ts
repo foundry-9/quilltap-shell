@@ -14,6 +14,26 @@ import { VMStatus, CommandResult } from './types';
 import { dirSize } from './disk-utils';
 
 /**
+ * Resolve the host's IANA timezone name (e.g. "America/Chicago"), or null if it
+ * can't be determined confidently.
+ *
+ * The guard matters. Anything that is not "UTC" or an "Area/Location" name —
+ * an abbreviation like "CDT" leaking in through the environment, say — would be
+ * silently ignored by the container's ICU and fall back to UTC, which is the
+ * exact bug this is meant to prevent. Better to pass nothing than to pass a lie.
+ */
+function detectHostTimezone(): string | null {
+  try {
+    const candidate = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!candidate) return null;
+    return candidate === 'UTC' || candidate.includes('/') ? candidate : null;
+  } catch {
+    // Intl unavailable — the container will fall back to UTC
+    return null;
+  }
+}
+
+/**
  * Common locations for the Docker CLI binary on macOS and Linux.
  * Packaged Electron apps have a minimal PATH that often excludes
  * /usr/local/bin and /opt/homebrew/bin, so we probe these explicitly.
@@ -161,6 +181,9 @@ export class DockerManager implements IVMManager {
     const imageRef = `${DOCKER_IMAGE}:${this.imageVersion}`;
     console.log('[DockerManager] Starting container:', this.containerName, 'from', imageRef);
 
+    const hostTimezone = detectHostTimezone();
+    console.log('[DockerManager] Host timezone:', hostTimezone ?? '(undetected — container will use UTC)');
+
     const args = [
       'run', '-d',
       '--name', this.containerName,
@@ -169,6 +192,18 @@ export class DockerManager implements IVMManager {
       '-e', `QUILLTAP_HOST_DATA_DIR=${this.dataDir}`,
       '-e', `QUILLTAP_SHELL=${APP_VERSION}`,
       '-e', `QUILLTAP_SHELL_CAPABILITIES=${SHELL_CAPABILITIES}`,
+      // Timezone: without this the container runs on UTC while the rest of the
+      // shell's launch modes run on the host clock. QUILLTAP_TIMEZONE drives
+      // timestamp formatting; TZ drives Node's system-local clock (day-based
+      // recall windows, midnight rollovers, scheduled jobs). The server's
+      // entrypoint mirrors one onto the other, but older images predate that,
+      // so set the pair explicitly to the same value.
+      ...(hostTimezone
+        ? [
+          '-e', `QUILLTAP_TIMEZONE=${hostTimezone}`,
+          '-e', `TZ=${hostTimezone}`,
+        ]
+        : []),
       // Linux Docker Engine doesn't provide host.docker.internal by default
       ...(process.platform === 'linux' ? ['--add-host=host.docker.internal:host-gateway'] : []),
       imageRef,
