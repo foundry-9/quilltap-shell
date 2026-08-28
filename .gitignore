@@ -142,6 +142,3 @@ vite.config.ts.timestamp-*
 .vscode
 dist-electron
 .DS_Store
-
-# Staged Lima binaries (downloaded by scripts/stage-lima.ts)
-electron/resources/lima/

@@ -10,15 +10,14 @@ This repository is for the Electron shell that runs the Quilltap server, whose s
 
 1. Load and run the code for the server directly, by loading the specified or latest version (either dev or release, specified by the user) of the quilltap server code as built in the Quilltap repository release, then install the correct platform-specific Node.js modules that are not pure Javascript, then run it using Electron's bundled version of Node.js.
 2. If Docker or Docker Desktop are installed, then it can load the specified image of the Quilltap server as a Docker image and run that as the server.
-3. If running under Windows with WSL2 installed, it can load and run the server using WSL2.
-4. If running under MacOS with Xcode Development Tools installed, it can load and run the server using Lima.
+3. Connect to an already-running Quilltap server at an arbitrary URL ("remote" mode) — the shell spawns and stops nothing, it just health-checks the URL and points the main window at it.
 
 ## Technology Stack
 
 - **Language**: TypeScript
 - **Package Manager**: npm
 - **Runtime**: Electron
-- **Server**: Downloads and runs the [Quilltap server](https://github.com/foundry-9/quilltap-server) standalone tarball, or manages it via Docker, WSL2, or Lima
+- **Server**: Downloads and runs the [Quilltap server](https://github.com/foundry-9/quilltap-server) standalone tarball, manages it via Docker, or connects to an already-running server at a user-supplied URL (remote mode)
 
 ## Quilltap Conventions
 
@@ -31,8 +30,6 @@ This repository is for the Electron shell that runs the Quilltap server, whose s
   - macOS: `~/Library/Application Support/Quilltap/`
   - Windows: `%APPDATA%\Quilltap\`
   - Docker: `/app/quilltap/`
-  - Lima VM: `/data/quilltap/` (VirtioFS mount of macOS path)
-  - WSL2: Accessed via `/mnt/c/.../AppData/Roaming/Quilltap/` (Windows path passed as env var)
 - Each instance contains: `data/`, `files/`, `logs/`
 - Custom instances via `QUILLTAP_DATA_DIR` environment variable or CLI flags
 - **IMPORTANT**: If I say I am in an instance in `~/iCloud/Quilltap/Friday`, for example, then this is the critical troubleshooting or development information I need for that instance:
@@ -44,10 +41,10 @@ This repository is for the Electron shell that runs the Quilltap server, whose s
 
 ### Shell ↔ Server Environment Variables
 
-The shell advertises itself to the Quilltap server via two environment variables that must be passed through in **every** launch mode (embedded, Docker `-e`, Lima template, WSL2 inherited env):
+The shell advertises itself to the Quilltap server via two environment variables that must be passed through in **every** launch mode that spawns a server (embedded, Docker `-e`):
 
 - **`QUILLTAP_SHELL`** — the shell's version string (from `APP_VERSION` / `package.json`).
-- **`QUILLTAP_SHELL_CAPABILITIES`** — comma-delimited capability flags (e.g. `OPENS_FS_PATH,DOWNLOADS_FILE`). The canonical value lives in `SHELL_CAPABILITIES` in `electron/constants.ts`. **When adding a new capability that the server needs to know about, add the flag there and ensure it flows through all four launch modes.**
+- **`QUILLTAP_SHELL_CAPABILITIES`** — comma-delimited capability flags (e.g. `OPENS_FS_PATH,DOWNLOADS_FILE`). The canonical value lives in `SHELL_CAPABILITIES` in `electron/constants.ts`. **When adding a new capability that the server needs to know about, add the flag there and ensure it flows through both launch modes.** (Remote mode cannot advertise capabilities — the server was started by someone else and inherits nothing from the shell.)
 
 ### Spelling **IMPORTANT**
 

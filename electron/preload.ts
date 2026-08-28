@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('quilltap', {
   getDirectories: (): Promise<DirectoryInfo> => ipcRenderer.invoke('splash:get-directories'),
   /** Open native folder picker and return chosen path (or empty string if cancelled) */
   selectDirectory: (): Promise<string> => ipcRenderer.invoke('splash:select-directory'),
-  /** Set the runtime mode (docker or vm) */
+  /** Set the runtime mode (docker, embedded, or remote) */
   setRuntimeMode: (mode: string) => ipcRenderer.send('splash:set-runtime-mode', mode),
   /** Set the server version to use ('latest', 'latest-dev', or a specific tag) */
   setServerVersion: (version: string) => ipcRenderer.send('splash:set-server-version', version),
@@ -30,14 +30,13 @@ contextBridge.exposeInMainWorld('quilltap', {
   /** Delete a directory with confirmation action ('config-only' or 'config-and-data') */
   deleteDirectory: (dirPath: string, action: string): Promise<boolean> =>
     ipcRenderer.invoke('splash:delete-directory', dirPath, action),
-  /** Erase the VM for a directory (stops and deletes VM only, preserves config and data) */
-  deleteVM: (dirPath: string): Promise<boolean> =>
-    ipcRenderer.invoke('splash:delete-vm', dirPath),
   /** Rename a directory's display name */
   renameDirectory: (dirPath: string, newName: string): Promise<boolean> =>
     ipcRenderer.invoke('splash:rename-directory', dirPath, newName),
   /** Save chosen directory and begin startup */
   startWithDirectory: (dirPath: string) => ipcRenderer.send('splash:start', dirPath),
+  /** Save the remote server URL and connect to it */
+  startRemote: (url: string) => ipcRenderer.send('splash:start-remote', url),
   /** Toggle auto-start preference */
   setAutoStart: (enabled: boolean) => ipcRenderer.send('splash:set-auto-start', enabled),
   /** Interrupt auto-start to show directory chooser */

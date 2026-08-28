@@ -36,7 +36,7 @@ export class ShellUpdater {
 
   /**
    * Register the backend shutdown callback.  Called before quitAndInstall so
-   * the running server (embedded, Docker, Lima, WSL2) is stopped gracefully.
+   * the running server (embedded or Docker) is stopped gracefully.
    */
   onBeforeQuitAndInstall(fn: () => Promise<void>): void {
     this.stopBackend = fn;

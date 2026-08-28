@@ -26,7 +26,6 @@ files:
   - node_modules/yallist/**/*
   - node_modules/yauzl/**/*
   # Exclude everything else from the project
-  - "!lima/**/*"
   - "!electron/*.ts"
 # Native modules are rebuilt in build scripts against Electron's Node ABI.
 # Disable electron-builder's own @electron/rebuild to prevent it from scanning the
@@ -49,13 +48,6 @@ mac:
   entitlements: electron/entitlements.mac.plist
   entitlementsInherit: electron/entitlements.mac.plist
   icon: electron/resources/icon.icns
-  signIgnore:
-    - "lima/share/lima/lima-guestagent"
-  extraResources:
-    - from: lima/quilltap.yaml
-      to: lima/quilltap.yaml
-    - from: electron/resources/lima/
-      to: lima/
 win:
   artifactName: "${productName}-${version}-${arch}.${ext}"
   # --- Azure Trusted Signing (uncomment when ready) ---

@@ -1,31 +1,22 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron';
-import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
   HOST_PORT,
-  LIMA_HOME,
-  ROOTFS_BUILD_ID_PATH,
   SPLASH_WIDTH,
   SPLASH_HEIGHT,
   MAIN_WIDTH,
   MAIN_HEIGHT,
-  DEFAULT_ROOTFS_URL,
   DEFAULT_DATA_DIR,
   APP_VERSION,
   DOCKER_IMAGE,
-  vmBuildIdPath,
-  rootfsDownloadUrl,
 } from './constants';
-import { IVMManager, createVMManager } from './vm-manager';
-import { LimaManager } from './lima-manager';
 import { DockerManager } from './docker-manager';
 import { EmbeddedManager } from './embedded-manager';
-import { DownloadManager } from './download-manager';
 import { StandaloneDownloadManager } from './standalone-download-manager';
 import { HealthChecker } from './health-checker';
-import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel, WindowBounds, VersionOption } from './types';
+import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, WindowBounds, VersionOption } from './types';
 import { AppSettings, loadSettings, saveSettings, saveWindowBounds, getWindowBounds, defaultNameForPath } from './settings';
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
@@ -73,10 +64,8 @@ const appRoot = app.isPackaged
 
 let splashWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
-let vmManager: IVMManager;
 let dockerManager: DockerManager;
 let embeddedManager: EmbeddedManager;
-let downloadManager: DownloadManager;
 let standaloneManager: StandaloneDownloadManager;
 let healthChecker: HealthChecker;
 let isQuitting = false;
@@ -113,10 +102,37 @@ function sendSplashError(message: string, canRetry: boolean = true): void {
   }
 }
 
-/** Get the VM label for the current platform */
-function getVMLabel(): string {
-  if (process.platform === 'linux') return 'Docker';
-  return process.platform === 'win32' ? 'WSL2' : 'Lima';
+/**
+ * The origin the main window (and menu navigation, and relative downloads)
+ * should point at: the dev server in dev mode, the configured remote server
+ * in remote mode, and the locally managed server otherwise.
+ */
+function serverBaseUrl(): string {
+  if (isDev) return 'http://localhost:3000';
+  if (appSettings.runtimeMode === 'remote' && appSettings.remoteServerUrl) {
+    return appSettings.remoteServerUrl;
+  }
+  return `http://localhost:${HOST_PORT}`;
+}
+
+/**
+ * Normalize a user-entered remote server address into a usable base URL.
+ * Accepts bare host:port (http:// is assumed), preserves any path prefix,
+ * strips trailing slashes. Returns null if the address is unusable.
+ */
+function normalizeRemoteUrl(raw: string): string | null {
+  let candidate = (raw || '').trim();
+  if (!candidate) return null;
+  if (!/^https?:\/\//i.test(candidate)) {
+    candidate = 'http://' + candidate;
+  }
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return (parsed.origin + parsed.pathname).replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -176,11 +192,11 @@ function sendDirectoryInfo(): void {
     runtimeMode: appSettings.runtimeMode,
     dockerAvailable,
     embeddedAvailable,
-    vmLabel: getVMLabel(),
     platform: process.platform,
     serverVersion: appSettings.serverVersion || 'latest',
     availableVersions: versions || cachedAvailableVersions || [],
     showPrerelease: appSettings.showPrerelease,
+    remoteServerUrl: appSettings.remoteServerUrl,
     minServerVersions,
     upgradeAvailable: checkForUpgrade(
       appSettings.serverVersion,
@@ -243,177 +259,10 @@ async function calculateDirectorySizes(): Promise<Record<string, DirectorySizeIn
       sizes[dir.path] = getSizesForDir(dir.path);
     } catch (err) {
       console.warn('[Main] Error calculating size for', dir.path, err);
-      sizes[dir.path] = { dataSize: -1, vmSize: -1 };
+      sizes[dir.path] = { dataSize: -1 };
     }
   }
   return sizes;
-}
-
-/**
- * Migrate the legacy single-VM "quilltap" instance to per-directory VMs.
- * On first launch after upgrade, if ~/.qtlima/quilltap/ exists (old single VM),
- * stop and delete it. The new per-directory VM will be created by the normal flow.
- */
-async function migrateLegacyVM(): Promise<void> {
-  if (process.platform !== 'darwin') return;
-
-  const legacyVmDir = path.join(LIMA_HOME, 'quilltap');
-  if (!fs.existsSync(legacyVmDir)) return;
-
-  console.log('[Main] Legacy single-VM detected at', legacyVmDir, '— migrating to per-directory VMs');
-
-  // Use the VM manager's exec capabilities to stop and delete the legacy VM.
-  // We temporarily need to interact with the old "quilltap" name.
-  // The safest way is to use limactl directly.
-  try {
-    const { execSync } = require('child_process');
-    const env = { ...process.env, LIMA_HOME };
-
-    // Try to stop it if running (ignore errors — it may already be stopped)
-    try {
-      execSync('limactl stop quilltap', { env, timeout: 60_000, stdio: 'pipe' });
-      console.log('[Main] Legacy VM stopped');
-    } catch {
-      console.log('[Main] Legacy VM was not running (or stop failed — proceeding with delete)');
-    }
-
-    // Delete the legacy VM
-    try {
-      execSync('limactl delete --force quilltap', { env, timeout: 60_000, stdio: 'pipe' });
-      console.log('[Main] Legacy VM deleted successfully');
-    } catch (err) {
-      console.warn('[Main] Could not delete legacy VM via limactl, removing directory directly:', err);
-      // Fallback: remove the directory directly
-      fs.rmSync(legacyVmDir, { recursive: true, force: true });
-      console.log('[Main] Legacy VM directory removed');
-    }
-  } catch (err) {
-    console.error('[Main] Legacy VM migration error:', err);
-    // Non-fatal — the old VM directory just takes up space
-  }
-}
-
-/**
- * Extract a user-friendly status message and log level from VM manager output lines.
- *
- * Lima (logrus key=value text format):
- *   time="2026-02-16T07:43:47-06:00" level=info msg="[hostagent] [VZ] - vm state change: running"
- *   — We extract the msg= value and the level= value.
- *
- * Lima (short logrus format, some operations):
- *   INFO[0005] Attempting to download the image  from="https://..." digest="sha256:..."
- *
- * Lima (JSON format, if configured):
- *   {"level":"info","msg":"Starting the VM","time":"..."}
- *
- * WSL outputs plain-text progress during import.
- */
-
-/**
- * Messages that are pure noise — suppress entirely (never shown or logged).
- * These are Lima internals that provide no value to the user or for debugging.
- */
-const VM_OUTPUT_SUPPRESS_PATTERNS = [
-  /\bNot forwarding\b/,
-  /\btcpproxy:.*error dialing\b/,
-];
-
-/**
- * Messages that repeat during boot — show the first occurrence, suppress duplicates.
- * Maps a regex to the last message key seen (reset per startup via resetVMOutputState).
- */
-const VM_OUTPUT_DEDUP_PATTERNS = [
-  /guest agent events closed unexpectedly/,
-  /Waiting for the essential requirement/,
-  /Waiting for the final requirement/,
-];
-
-/** Track which dedup messages we've already seen (reset per startup) */
-let seenDedupMessages = new Set<number>();
-
-/** Reset dedup tracking at the start of each startup sequence */
-function resetVMOutputState(): void {
-  seenDedupMessages = new Set();
-}
-
-function formatVMOutput(line: string): { message: string; level: DetailLevel } | null {
-  const trimmed = line.trim();
-  if (!trimmed) return null;
-
-  // Suppress known noise patterns entirely
-  for (const pattern of VM_OUTPUT_SUPPRESS_PATTERNS) {
-    if (pattern.test(trimmed)) return null;
-  }
-
-  // Try JSON format first: {"level":"info","msg":"..."}
-  if (trimmed.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed.msg) {
-        return filterDedupAndReturn(truncate(parsed.msg), toDetailLevel(parsed.level));
-      }
-    } catch {
-      // Not valid JSON — fall through
-    }
-  }
-
-  // Logrus key=value text format: time="..." level=info msg="..."
-  const msgMatch = trimmed.match(/\bmsg="((?:[^"\\]|\\.)*)"/);
-  if (msgMatch) {
-    const msg = msgMatch[1].replace(/\\"/g, '"');
-    const levelMatch = trimmed.match(/\blevel=(\w+)/);
-    const level = levelMatch ? toDetailLevel(levelMatch[1]) : 'info';
-    return filterDedupAndReturn(truncate(msg), level);
-  }
-
-  // Short logrus format: LEVEL[NNNN] message  key=value
-  const shortMatch = trimmed.match(/^(DEBU|INFO|WARN|ERRO|FATA|PANI)\[\d+\]\s+(.+)/);
-  if (shortMatch) {
-    const levelMap: Record<string, DetailLevel> = {
-      'DEBU': 'debug', 'INFO': 'info', 'WARN': 'warn',
-      'ERRO': 'error', 'FATA': 'error', 'PANI': 'error',
-    };
-    const level = levelMap[shortMatch[1]] || 'info';
-    const fullText = shortMatch[2];
-    // The msg ends where key=value pairs begin (double-space separator)
-    const dblIdx = fullText.indexOf('  ');
-    const msg = dblIdx > 0 ? fullText.substring(0, dblIdx) : fullText;
-    return filterDedupAndReturn(truncate(msg.trim()), level);
-  }
-
-  // Plain text (WSL or other) — return as info
-  const cleaned = trimmed.replace(/\0/g, '');
-  if (!cleaned) return null;
-  return filterDedupAndReturn(truncate(cleaned), 'info');
-}
-
-/** Check dedup patterns and suppress repeated messages after the first occurrence */
-function filterDedupAndReturn(message: string, level: DetailLevel): { message: string; level: DetailLevel } | null {
-  for (let i = 0; i < VM_OUTPUT_DEDUP_PATTERNS.length; i++) {
-    if (VM_OUTPUT_DEDUP_PATTERNS[i].test(message)) {
-      if (seenDedupMessages.has(i)) {
-        return null; // Already shown this pattern once — suppress
-      }
-      seenDedupMessages.add(i);
-    }
-  }
-  return { message, level };
-}
-
-/** Normalize a level string to a valid DetailLevel */
-function toDetailLevel(raw: string | undefined): DetailLevel {
-  if (!raw) return 'info';
-  const lower = raw.toLowerCase();
-  if (lower === 'warning') return 'warn';
-  if (lower === 'fatal' || lower === 'panic') return 'error';
-  if (['info', 'warn', 'error', 'debug'].includes(lower)) return lower as DetailLevel;
-  return 'info';
-}
-
-/** Truncate a string to a splash-friendly length */
-function truncate(text: string, max: number = 120): string {
-  if (text.length <= max) return text;
-  return text.substring(0, max - 3) + '...';
 }
 
 /** Build a minimal application menu for the splash screen phase (macOS shows default Help otherwise) */
@@ -481,7 +330,7 @@ function createSplashWindow(): BrowserWindow {
   return win;
 }
 
-/** Stop the currently running backend (VM, Docker container, or embedded server) */
+/** Stop the currently running backend (Docker container or embedded server) */
 async function stopCurrentBackend(): Promise<void> {
   if (appSettings.runtimeMode === 'docker') {
     console.log('[Main] Stopping Docker container...');
@@ -497,14 +346,8 @@ async function stopCurrentBackend(): Promise<void> {
     } catch (err) {
       console.warn('[Main] Error stopping embedded server (non-fatal):', err);
     }
-  } else {
-    console.log('[Main] Stopping VM...');
-    try {
-      await vmManager.stopVM();
-    } catch (err) {
-      console.warn('[Main] Error stopping VM (non-fatal):', err);
-    }
   }
+  // Remote mode: the server is somebody else's responsibility — nothing to stop
 }
 
 /**
@@ -566,7 +409,7 @@ async function changeSite(): Promise<void> {
 
 /** Build the application menu with Navigate items */
 function buildAppMenu(win: BrowserWindow): void {
-  const appOrigin = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
+  const appOrigin = serverBaseUrl();
 
   const navigateItems: { label: string; path: string; accelerator?: string }[] = [
     { label: 'Home', path: '/', accelerator: 'CmdOrCtrl+Shift+H' },
@@ -809,9 +652,7 @@ function createMainWindow(urlPath?: string): BrowserWindow {
   win.on('maximize', () => persistWindowBounds(win));
   win.on('unmaximize', () => persistWindowBounds(win));
 
-  const baseUrl = isDev
-    ? 'http://localhost:3000'
-    : `http://localhost:${HOST_PORT}`;
+  const baseUrl = serverBaseUrl();
   const url = urlPath ? `${baseUrl}${urlPath}` : baseUrl;
 
   // Intercept new-window requests (target="_blank", window.open)
@@ -903,7 +744,7 @@ function showDirectoryChooser(): void {
 function onSplashReady(): void {
   if (isDev) {
     // In dev mode, skip directory chooser entirely
-    startupSequence(appSettings.lastDataDir);
+    devStartupSequence();
     return;
   }
 
@@ -914,7 +755,11 @@ function onSplashReady(): void {
     return;
   }
 
-  if (appSettings.autoStart && appSettings.lastDataDir) {
+  const autoStartReady = appSettings.runtimeMode === 'remote'
+    ? !!appSettings.remoteServerUrl
+    : !!appSettings.lastDataDir;
+
+  if (appSettings.autoStart && autoStartReady) {
     // Auto-start: show a brief loading state with "change" link visible
     autoStartPending = true;
     sendSplashUpdate({
@@ -938,321 +783,78 @@ function onSplashReady(): void {
 }
 
 /**
- * Main startup sequence. Orchestrates:
- * 1. System requirements check
- * 2. Rootfs download (if needed)
- * 3. VM creation (if needed) — per-directory VM, no recreation on dir change
- * 4. VM start (if needed)
- * 5. Health check polling
- * 6. Main window launch
+ * Dev-mode startup sequence: connect to the externally-run dev server
+ * on localhost:3000 (no backend is spawned by the shell).
  */
-async function startupSequence(dataDir: string): Promise<void> {
+async function devStartupSequence(): Promise<void> {
   autoStartPending = false;
 
-  // Initialize startup log (overwrites any previous log)
-  initStartupLog(dataDir);
-  resetVMOutputState();
-
-  // Configure the VM manager with the chosen data directory
-  vmManager.setDataDir(dataDir);
-  console.log(`[Main] Starting with data directory: ${dataDir}`);
-  console.log(`[Main] VM name for directory: ${vmManager.getVMName()}`);
-
-  // In dev mode, skip VM entirely
-  if (isDev) {
-    sendSplashUpdate({
-      phase: 'waiting-health',
-      message: 'Connecting to dev server...',
-    });
-
-    const status = await healthChecker.waitForHealthy(30, 1000, (s) => {
-      sendSplashUpdate({
-        phase: 'waiting-health',
-        message: `Waiting for dev server... (attempt ${s.attempts})`,
-        detail: s.error || '',
-      });
-    });
-
-    if (status.status === 'healthy' || status.status === 'degraded') {
-      mainWindow = createMainWindow();
-      markStartupSuccess();
-      return;
-    }
-
-    if (status.status === 'locked') {
-      // Server is in locked mode — load the setup/unlock page
-      mainWindow = createMainWindow('/setup');
-      markStartupSuccess();
-      return;
-    }
-
-    sendSplashError(
-      'Could not connect to dev server at localhost:3000. Is "npm run dev" running?',
-      true
-    );
-    return;
-  }
-
-  // --- Production / VM mode ---
-
-  // Step 0: Stop any running Docker container or embedded server to prevent port conflicts
-  try {
-    dockerManager.setDataDir(dataDir);
-    await dockerManager.stopContainer();
-  } catch (err) {
-    console.warn('[Main] Could not stop Docker container (non-fatal):', err);
-  }
-  try {
-    await embeddedManager.stopServer();
-  } catch (err) {
-    console.warn('[Main] Could not stop embedded server (non-fatal):', err);
-  }
-
-  // Step 1: Initializing — check platform prerequisites
-  sendSplashUpdate({
-    phase: 'initializing',
-    message: 'Checking system requirements...',
-  });
-
-  // Migrate legacy single-VM if present (one-time operation)
-  await migrateLegacyVM();
-
-  // Verify platform prerequisites (WSL2 on Windows, CLT + limactl on macOS)
-  const prereq = await vmManager.checkPrerequisites();
-  if (!prereq.ok) {
-    if (prereq.error === 'CLT_MISSING') {
-      // Xcode Command Line Tools not installed — offer to install them
-      const result = await dialog.showMessageBox({
-        type: 'warning',
-        title: 'Xcode Command Line Tools Required',
-        message: 'Quilltap needs Xcode Command Line Tools to run its virtual machine.',
-        detail:
-          'Lima requires macOS SDK libraries provided by Xcode Command Line Tools. ' +
-          'Click "Install" to open the Apple installer, then click "Retry" in Quilltap after installation completes.',
-        buttons: ['Install', 'Quit'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-
-      if (result.response === 0) {
-        // Spawn the Apple CLT installer UI
-        spawn('xcode-select', ['--install'], { stdio: 'ignore', detached: true }).unref();
-        sendSplashError(
-          'Installing Xcode Command Line Tools...\n\n' +
-          'Complete the Apple installer, then click Retry.',
-          true
-        );
-      } else {
-        app.quit();
-      }
-      return;
-    }
-
-    if (prereq.error === 'DOCKER_PERMISSION_DENIED') {
-      sendSplashError(
-        'Docker permission denied.\n\n' +
-        'Add your user to the docker group:\n' +
-        '  sudo usermod -aG docker $USER\n\n' +
-        'Then log out and back in.',
-        true
-      );
-      return;
-    }
-
-    sendSplashError(prereq.error || 'System requirements not met.', false);
-    return;
-  }
-
-  // Step 2: Resolve target version from settings (same logic as embedded/docker modes)
-  let targetVersion = appSettings.serverVersion || '';
-  if (!targetVersion || targetVersion === 'latest' || targetVersion === 'latest-dev') {
-    try {
-      const channel = targetVersion === 'latest-dev' ? 'dev' : 'release';
-      sendSplashUpdate({
-        phase: 'initializing',
-        message: 'Checking for latest server version...',
-      });
-      targetVersion = await standaloneManager.getLatestVersion(channel);
-      console.log(`[Main] VM: resolved server version: ${targetVersion}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn('[Main] Could not fetch latest version from GitHub:', msg);
-      // Fall back to APP_VERSION if offline
-      if (APP_VERSION) {
-        console.log(`[Main] VM: falling back to app version: ${APP_VERSION}`);
-        targetVersion = APP_VERSION;
-      } else {
-        sendSplashError(
-          `Could not determine server version for VM.\n\n` +
-          `Check your internet connection and try again.\n\n` +
-          `Error: ${msg}`,
-          true,
-        );
-        return;
-      }
-    }
-  }
-
-  // Check minServerVersion requirement before proceeding
-  if (!checkMinServerVersion(dataDir, targetVersion)) return;
-
-  // Configure download manager with the resolved version
-  downloadManager.setTargetVersion(targetVersion);
-
-  // Step 2b: Check if rootfs needs downloading
-  if (downloadManager.needsDownload()) {
-    sendSplashUpdate({
-      phase: 'downloading',
-      message: 'Downloading system image...',
-      detail: `Version ${targetVersion} — this only happens on first launch or after updates`,
-    });
-
-    try {
-      const downloadUrl = process.env.QUILLTAP_ROOTFS_URL || rootfsDownloadUrl(targetVersion);
-      if (!downloadUrl) {
-        sendSplashError(
-          'No rootfs tarball found and no download URL available. ' +
-          'Set QUILLTAP_ROOTFS_URL or install from an official release.',
-          true
-        );
-        return;
-      }
-
-      await downloadManager.download(downloadUrl, (progress) => {
-        sendSplashUpdate({
-          phase: 'downloading',
-          message: 'Downloading system image...',
-          progress: progress.percent,
-          detail: `${progress.speed} — ${progress.percent}%`,
-        });
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      sendSplashError(`Download failed: ${msg}`, true);
-      return;
-    }
-  }
-
-  // Step 3: Check VM status (per-directory VM — no mismatch check needed)
-  sendSplashUpdate({
-    phase: 'initializing',
-    message: 'Checking virtual machine...',
-  });
-
-  const vmStatus = await vmManager.checkStatus();
-
-  // Step 3b: Check if rootfs tarball has been updated since the VM was provisioned
-  const currentVmBuildIdPath = vmBuildIdPath(vmManager.getVMName());
-  if (vmStatus.exists) {
-    let tarballBuildId = '';
-    let vmBuildId = '';
-    try { tarballBuildId = fs.readFileSync(ROOTFS_BUILD_ID_PATH, 'utf-8').trim(); } catch { /* missing is fine */ }
-    try { vmBuildId = fs.readFileSync(currentVmBuildIdPath, 'utf-8').trim(); } catch { /* missing is fine */ }
-
-    if (tarballBuildId && tarballBuildId !== vmBuildId) {
-      console.log(`[Main] Rootfs updated: tarball="${tarballBuildId}" vm="${vmBuildId}" — reprovisioning VM`);
-      sendSplashUpdate({
-        phase: 'updating-vm',
-        message: 'Updating Quilltap to latest build...',
-        detail: `New build: ${tarballBuildId}`,
-      });
-
-      if (vmStatus.running) {
-        await vmManager.stopVM();
-      }
-      await vmManager.deleteVM();
-      vmStatus.exists = false;
-      vmStatus.running = false;
-    }
-  }
-
-  // Step 4: Create VM if it doesn't exist
-  if (!vmStatus.exists) {
-    sendSplashUpdate({
-      phase: 'creating-vm',
-      message: 'Creating virtual machine...',
-      detail: 'This may take a minute on first launch',
-    });
-
-    const createResult = await vmManager.createVM((line) => {
-      const parsed = formatVMOutput(line);
-      if (parsed) {
-        sendSplashUpdate({
-          phase: 'creating-vm',
-          message: 'Creating virtual machine...',
-          detail: parsed.message,
-          detailLevel: parsed.level,
-        });
-      }
-    });
-    if (!createResult.success) {
-      // Clear CLT cache so next retry re-checks prerequisites
-      if (vmManager instanceof LimaManager) {
-        vmManager.clearCLTCache();
-      }
-      sendSplashError(`Failed to create VM: ${createResult.error}`, true);
-      return;
-    }
-
-    // Record the tarball build ID so we can detect future updates
-    try {
-      const tarballBuildId = fs.readFileSync(ROOTFS_BUILD_ID_PATH, 'utf-8').trim();
-      if (tarballBuildId) {
-        fs.mkdirSync(path.dirname(currentVmBuildIdPath), { recursive: true });
-        fs.writeFileSync(currentVmBuildIdPath, tarballBuildId, 'utf-8');
-        console.log(`[Main] Wrote VM build ID: ${tarballBuildId}`);
-      }
-    } catch {
-      // Non-fatal — build ID marker is best-effort
-      console.warn('[Main] Could not write VM build ID marker');
-    }
-  }
-
-  // Step 5: Start VM if not running
-  if (!vmStatus.running) {
-    sendSplashUpdate({
-      phase: 'starting-vm',
-      message: 'Starting virtual machine...',
-    });
-
-    const startResult = await vmManager.startVM((line) => {
-      const parsed = formatVMOutput(line);
-      if (parsed) {
-        sendSplashUpdate({
-          phase: 'starting-vm',
-          message: 'Starting virtual machine...',
-          detail: parsed.message,
-          detailLevel: parsed.level,
-        });
-      }
-    });
-    if (!startResult.success) {
-      // Clear CLT cache so next retry re-checks prerequisites
-      if (vmManager instanceof LimaManager) {
-        vmManager.clearCLTCache();
-      }
-      sendSplashError(`Failed to start VM: ${startResult.error}`, true);
-      return;
-    }
-  }
-
-  // Step 6: Wait for health
   sendSplashUpdate({
     phase: 'waiting-health',
-    message: 'Waiting for Quilltap to start...',
+    message: 'Connecting to dev server...',
   });
 
-  const healthStatus = await healthChecker.waitForHealthy(undefined, undefined, (s) => {
+  const status = await healthChecker.waitForHealthy(30, 1000, (s) => {
+    sendSplashUpdate({
+      phase: 'waiting-health',
+      message: `Waiting for dev server... (attempt ${s.attempts})`,
+      detail: s.error || '',
+    });
+  });
+
+  if (status.status === 'healthy' || status.status === 'degraded') {
+    mainWindow = createMainWindow();
+    markStartupSuccess();
+    return;
+  }
+
+  if (status.status === 'locked') {
+    // Server is in locked mode — load the setup/unlock page
+    mainWindow = createMainWindow('/setup');
+    markStartupSuccess();
+    return;
+  }
+
+  sendSplashError(
+    'Could not connect to dev server at localhost:3000. Is "npm run dev" running?',
+    true
+  );
+}
+
+/**
+ * Remote startup sequence. Connects to an already-running Quilltap server
+ * at the user-configured URL — nothing to download, create, or spawn.
+ * Deliberately leaves any locally-managed backend alone: the remote address
+ * may well point at it.
+ */
+async function remoteStartupSequence(): Promise<void> {
+  autoStartPending = false;
+
+  const url = appSettings.remoteServerUrl;
+  if (!url) {
+    showDirectoryChooser();
+    return;
+  }
+
+  console.log(`[Main] Connecting to remote server: ${url}`);
+
+  sendSplashUpdate({
+    phase: 'waiting-health',
+    message: 'Connecting to server...',
+    detail: url,
+  });
+
+  const remoteChecker = new HealthChecker(`${url}/api/health`);
+  const healthStatus = await remoteChecker.waitForHealthy(15, 1000, (s) => {
     sendSplashUpdate({
       phase: 'waiting-health',
       message: `Waiting for server... (attempt ${s.attempts})`,
-      detail: s.error || '',
+      detail: s.error || url,
     });
   });
 
   if (healthStatus.status === 'locked') {
     sendSplashUpdate({ phase: 'ready', message: 'Database locked — passphrase required' });
-    closeStartupLog();
     mainWindow = createMainWindow('/setup');
     markStartupSuccess();
     return;
@@ -1263,30 +865,17 @@ async function startupSequence(dataDir: string): Promise<void> {
       phase: 'ready',
       message: 'Ready!',
     });
-
-    closeStartupLog();
     mainWindow = createMainWindow();
     markStartupSuccess();
-
-    // Start workspace watcher after VM/Docker is healthy
-    try {
-      const workspaceDir = path.join(dataDir, 'workspace');
-      workspaceWatcher = new WorkspaceWatcher({
-        workspaceDir,
-        log: (msg, data) => logStartup(`[WorkspaceWatcher] ${msg} ${data ? JSON.stringify(data) : ''}`),
-      });
-      workspaceWatcher.start();
-    } catch (err) {
-      logStartup(`[WorkspaceWatcher] Failed to start: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  } else {
-    const logs = await vmManager.getLogs(20);
-    sendSplashError(
-      `Server did not become healthy after ${healthStatus.attempts} attempts.\n\nRecent logs:\n${logs}`,
-      true
-    );
-    closeStartupLog();
+    return;
   }
+
+  sendSplashError(
+    `Could not reach a Quilltap server at ${url}.\n\n` +
+    `Make sure the server is running and the address is correct` +
+    (healthStatus.error ? `.\n\nLast error: ${healthStatus.error}` : '.'),
+    true,
+  );
 }
 
 /**
@@ -1321,19 +910,21 @@ function checkMinServerVersion(dataDir: string, resolvedVersion: string): boolea
 
 /** Route startup to the correct backend based on runtime mode setting. */
 function routeStartup(dataDir: string): void {
-  if (appSettings.runtimeMode === 'docker') {
+  if (isDev) {
+    devStartupSequence();
+  } else if (appSettings.runtimeMode === 'remote') {
+    remoteStartupSequence();
+  } else if (appSettings.runtimeMode === 'docker') {
     dockerStartupSequence(dataDir);
-  } else if (appSettings.runtimeMode === 'embedded') {
-    embeddedStartupSequence(dataDir);
   } else {
-    startupSequence(dataDir);
+    embeddedStartupSequence(dataDir);
   }
 }
 
 /**
  * Docker startup sequence. Orchestrates:
  * 1. Verify Docker available
- * 2. Stop any running VM (port conflict prevention)
+ * 2. Stop any running embedded server (port conflict prevention)
  * 3. Pull Docker image if needed
  * 4. Start container with bind mount
  * 5. Health check polling
@@ -1344,7 +935,6 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
 
   // Initialize startup log (overwrites any previous log)
   initStartupLog(dataDir);
-  resetVMOutputState();
 
   dockerManager.setDataDir(dataDir);
   console.log(`[Main] Docker startup with data directory: ${dataDir}`);
@@ -1364,23 +954,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     return;
   }
 
-  // Step 2: Stop any running VM or embedded server to prevent port conflicts
-  if (process.platform !== 'linux') {
-    try {
-      const vmStatus = await vmManager.checkStatus();
-      if (vmStatus.running) {
-        console.log('[Main] Stopping running VM to prevent port conflict with Docker');
-        sendSplashUpdate({
-          phase: 'initializing',
-          message: 'Stopping virtual machine...',
-          detail: 'Preventing port conflict with Docker',
-        });
-        await vmManager.stopVM();
-      }
-    } catch (err) {
-      console.warn('[Main] Could not check/stop VM (non-fatal):', err);
-    }
-  }
+  // Step 2: Stop any running embedded server to prevent port conflicts
   try {
     await embeddedManager.stopServer();
   } catch (err) {
@@ -1510,7 +1084,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
 
 /**
  * Embedded server startup sequence. Orchestrates:
- * 1. Stop any running VM/Docker to prevent port conflicts
+ * 1. Stop any running Docker container to prevent port conflicts
  * 2. Spawn server.js via Electron's Node.js runtime
  * 3. Health check polling
  * 4. Main window launch
@@ -1523,28 +1097,11 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
 
   console.log(`[Main] Embedded server startup with data directory: ${dataDir}`);
 
-  // Step 1: Stop any running VM or Docker container to prevent port conflicts
+  // Step 1: Stop any running Docker container to prevent port conflicts
   sendSplashUpdate({
     phase: 'initializing',
     message: 'Preparing to start server...',
   });
-
-  if (process.platform !== 'linux') {
-    try {
-      const vmStatus = await vmManager.checkStatus();
-      if (vmStatus.running) {
-        console.log('[Main] Stopping running VM to prevent port conflict with embedded server');
-        sendSplashUpdate({
-          phase: 'initializing',
-          message: 'Stopping virtual machine...',
-          detail: 'Preventing port conflict with embedded server',
-        });
-        await vmManager.stopVM();
-      }
-    } catch (err) {
-      console.warn('[Main] Could not check/stop VM (non-fatal):', err);
-    }
-  }
 
   try {
     dockerManager.setDataDir(dataDir);
@@ -1766,17 +1323,12 @@ app.whenReady().then(async () => {
     saveSettings(appSettings);
   }
 
-  vmManager = createVMManager();
   dockerManager = new DockerManager();
   embeddedManager = new EmbeddedManager();
-  downloadManager = new DownloadManager();
   standaloneManager = new StandaloneDownloadManager();
   healthChecker = isDev
     ? new HealthChecker('http://localhost:3000/api/health')
     : new HealthChecker();
-
-  // Pre-configure VM manager with last-used directory
-  vmManager.setDataDir(appSettings.lastDataDir);
 
   // Initialize shell auto-updater (skip in dev mode)
   if (!isDev) {
@@ -1841,11 +1393,11 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     runtimeMode: appSettings.runtimeMode,
     dockerAvailable,
     embeddedAvailable,
-    vmLabel: getVMLabel(),
     platform: process.platform,
     serverVersion: appSettings.serverVersion || 'latest',
     availableVersions: cachedAvailableVersions || [],
     showPrerelease: appSettings.showPrerelease,
+    remoteServerUrl: appSettings.remoteServerUrl,
     minServerVersions: readMinServerVersions(),
   };
 });
@@ -1879,10 +1431,10 @@ ipcMain.handle('splash:select-directory', async (): Promise<string> => {
   return selectedPath;
 });
 
-/** Set the runtime mode (docker, vm, or embedded) */
+/** Set the runtime mode (docker, embedded, or remote) */
 ipcMain.on('splash:set-runtime-mode', (_event, mode: string) => {
   const runtimeMode: RuntimeMode = mode === 'docker' ? 'docker'
-    : mode === 'embedded' ? 'embedded' : 'vm';
+    : mode === 'remote' ? 'remote' : 'embedded';
   console.log('[Main] Runtime mode set to:', runtimeMode);
   appSettings.runtimeMode = runtimeMode;
   saveSettings(appSettings);
@@ -1927,23 +1479,6 @@ ipcMain.handle('splash:delete-directory', async (_event, dirPath: string, action
   console.log('[Main] Delete directory:', dirPath, 'action:', action);
 
   try {
-    // Stop and delete any associated VM
-    try {
-      const tempVMManager = createVMManager();
-      tempVMManager.setDataDir(dirPath);
-      const vmStatus = await tempVMManager.checkStatus();
-      if (vmStatus.running) {
-        console.log('[Main] Stopping VM for directory:', dirPath);
-        await tempVMManager.stopVM();
-      }
-      if (vmStatus.exists) {
-        console.log('[Main] Deleting VM for directory:', dirPath);
-        await tempVMManager.deleteVM();
-      }
-    } catch (err) {
-      console.warn('[Main] Error cleaning up VM for', dirPath, '(non-fatal):', err);
-    }
-
     // Stop and delete any associated Docker container
     try {
       await dockerManager.deleteContainerForDir(dirPath);
@@ -1979,30 +1514,6 @@ ipcMain.handle('splash:delete-directory', async (_event, dirPath: string, action
   }
 });
 
-/** Erase the VM for a directory (stop + delete VM only, preserve config and data) */
-ipcMain.handle('splash:delete-vm', async (_event, dirPath: string): Promise<boolean> => {
-  console.log('[Main] Erase VM for directory:', dirPath);
-  try {
-    const tempVMManager = createVMManager();
-    tempVMManager.setDataDir(dirPath);
-    const vmStatus = await tempVMManager.checkStatus();
-    if (vmStatus.running) {
-      console.log('[Main] Stopping VM for directory:', dirPath);
-      await tempVMManager.stopVM();
-    }
-    if (vmStatus.exists) {
-      console.log('[Main] Deleting VM for directory:', dirPath);
-      await tempVMManager.deleteVM();
-    }
-    // Refresh sizes so the UI shows "No VM" for this directory
-    sendDirectoryInfo();
-    return true;
-  } catch (err) {
-    console.error('[Main] Error erasing VM:', err);
-    return false;
-  }
-});
-
 /** User chose a directory and clicked Start */
 ipcMain.on('splash:start', (_event, dirPath: string) => {
   console.log('[Main] Starting with directory:', dirPath);
@@ -2020,6 +1531,28 @@ ipcMain.on('splash:start', (_event, dirPath: string) => {
   saveSettings(appSettings);
 
   routeStartup(dirPath);
+});
+
+/** User entered a remote server address and clicked Start */
+ipcMain.on('splash:start-remote', (_event, rawUrl: string) => {
+  autoStartPending = false;
+
+  const normalized = normalizeRemoteUrl(rawUrl);
+  if (!normalized) {
+    sendSplashError(
+      `That doesn't look like a server address: "${(rawUrl || '').trim()}"\n\n` +
+      `Try something like http://192.168.1.20:5050`,
+      true,
+    );
+    return;
+  }
+
+  console.log('[Main] Starting with remote server:', normalized);
+  appSettings.runtimeMode = 'remote';
+  appSettings.remoteServerUrl = normalized;
+  saveSettings(appSettings);
+
+  remoteStartupSequence();
 });
 
 /** Toggle auto-start preference */
@@ -2088,8 +1621,7 @@ ipcMain.handle('app:open-path', async (_event, dirPath: string) => {
 ipcMain.handle('app:download-url', async (_event, url: string) => {
   if (!mainWindow) return;
   // Resolve relative URLs against the app server
-  const baseUrl = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
-  const fullUrl = url.startsWith('/') ? `${baseUrl}${url}` : url;
+  const fullUrl = url.startsWith('/') ? `${serverBaseUrl()}${url}` : url;
   console.log(`[Main] Triggering download for: ${fullUrl}`);
   mainWindow.webContents.downloadURL(fullUrl);
 });
@@ -2138,8 +1670,7 @@ function createShutdownWindow(): BrowserWindow {
     },
   });
 
-  const backendLabel = appSettings.runtimeMode === 'docker' ? 'container'
-    : appSettings.runtimeMode === 'embedded' ? 'server' : 'virtual machine';
+  const backendLabel = appSettings.runtimeMode === 'docker' ? 'container' : 'server';
   const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2171,9 +1702,19 @@ function createShutdownWindow(): BrowserWindow {
   return win;
 }
 
-// Graceful shutdown: stop the VM or Docker container before quitting
+// Graceful shutdown: stop the Docker container or embedded server before quitting
 app.on('before-quit', async (event) => {
   if (isQuitting || isDev) return;
+
+  // Remote mode spawned nothing, so there is nothing to stop
+  if (appSettings.runtimeMode === 'remote') {
+    if (workspaceWatcher) {
+      workspaceWatcher.stop();
+      workspaceWatcher = null;
+    }
+    isQuitting = true;
+    return;
+  }
 
   isQuitting = true;
   event.preventDefault();
@@ -2204,19 +1745,12 @@ app.on('before-quit', async (event) => {
     } catch (err) {
       console.error('[Main] Error stopping Docker container:', err);
     }
-  } else if (appSettings.runtimeMode === 'embedded') {
+  } else {
     console.log('[Main] Stopping embedded server before quit...');
     try {
       await embeddedManager.stopServer();
     } catch (err) {
       console.error('[Main] Error stopping embedded server:', err);
-    }
-  } else {
-    console.log('[Main] Stopping VM before quit...');
-    try {
-      await vmManager.stopVM();
-    } catch (err) {
-      console.error('[Main] Error stopping VM:', err);
     }
   }
 

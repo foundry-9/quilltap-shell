@@ -7,7 +7,6 @@ import { DownloadProgress, RuntimeMode, VersionOption } from './types';
 import {
   STANDALONE_CACHE_DIR,
   GITHUB_REPO,
-  ROOTFS_FILENAME,
   DOWNLOAD_MAX_RETRIES,
   DOWNLOAD_PROGRESS_THROTTLE_MS,
 } from './constants';
@@ -130,9 +129,6 @@ export class StandaloneDownloadManager {
         // Filter by available assets for the requested runtime mode
         if (mode === 'docker') {
           // All tagged releases are assumed to have Docker images
-        } else if (mode === 'vm') {
-          const hasRootfs = r.assets.some((a: { name: string }) => a.name === ROOTFS_FILENAME);
-          if (!hasRootfs) return false;
         } else {
           // Default (embedded): must have a standalone tarball asset
           const hasStandalone = r.assets.some((a) => a.name.startsWith('quilltap-standalone-'));

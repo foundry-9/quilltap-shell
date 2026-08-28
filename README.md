@@ -20,7 +20,7 @@ There is a school of thought — held chiefly by people who have never had to ex
 
 The Quilltap Launcher is an Electron desktop application that manages the entire lifecycle of your Quilltap server. It downloads the server, starts it, keeps it updated, and presents the interface in a native window on macOS, Windows, and Linux. It is the recommended way for most people to run Quilltap, and it is the only path that does not require you to open a terminal.
 
-If you have ever used a desktop email client — the kind that talks to a mail server without asking you to configure SMTP ports — the concept is the same. The Launcher is the client. Quilltap is the server. The Launcher runs the server for you, in one of three ways, and you never need to know which one unless you want to.
+If you have ever used a desktop email client — the kind that talks to a mail server without asking you to configure SMTP ports — the concept is the same. The Launcher is the client. Quilltap is the server. The Launcher runs the server for you, in one of two ways — or, if you already have a server running somewhere, simply points itself at it — and you never need to know which one unless you want to.
 
 ## The Three Runtimes
 
@@ -34,17 +34,15 @@ The trade-off is isolation: the server runs with your user permissions, on your 
 
 ### Docker
 
-The Launcher pulls and manages a Docker container from `foundry9/quilltap`. The server runs inside the container with its own filesystem and process space. This provides a meaningful isolation boundary — not as airtight as a virtual machine, but considerably better than nothing, and with near-instant startup after the initial image pull.
+The Launcher pulls and manages a Docker container from `foundry9/quilltap`. The server runs inside the container with its own filesystem and process space. This provides a meaningful isolation boundary — considerably better than nothing, and with near-instant startup after the initial image pull. It is the option of choice if you intend to let your characters run scripts.
 
 Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows, macOS) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux). The Launcher detects Docker availability automatically and disables the button if it isn't found.
 
-### VM (macOS and Windows only)
+### Remote
 
-The Launcher boots a lightweight Linux virtual machine — [Lima](https://lima-vm.io/) with Apple's Virtualization.framework on macOS, WSL2 on Windows — and runs the Quilltap server inside it. This is genuine locked-room isolation: if an AI-generated script misbehaves, it misbehaves inside a contained environment with no access to your host system beyond what you've explicitly shared.
+The Launcher spawns nothing at all. You give it the address of a Quilltap server that is already running — on this machine, on the workstation in the study, on a box humming away in a closet across the house — and it presents that server in a native window, exactly as if it had started it itself. Enter a URL and port (`http://192.168.1.20:5050`, say; bare `host:port` is accepted and `http://` assumed), click Start, and the Launcher checks the server's health and opens the door.
 
-The first launch is the slowest of the three options (it downloads a ~150 MB system image and boots a Linux guest), but subsequent launches take only a few seconds. Lima binaries are bundled with the macOS build; WSL2 is built into Windows 10 and 11.
-
-On Linux, the VM button is hidden. Linux *is* the VM.
+Starting, stopping, and updating that server is your affair — the Launcher will neither shut it down when you quit nor presume to choose its version. The data directory list and version selector disappear in this mode, because the remote server keeps its own data and knows its own version.
 
 ## The Splash Screen
 
@@ -59,9 +57,9 @@ That's it. No configuration files, no environment variables, no incantations.
 
 ### Data Directories
 
-Quilltap stores everything — your chats, characters, memories, API keys, themes, and database — in a single data directory. The Launcher lets you manage multiple data directories from the splash screen: one for work, one for fiction, one for experiments. Each gets its own database, its own configuration, its own VM (if applicable).
+Quilltap stores everything — your chats, characters, memories, API keys, themes, and database — in a single data directory. The Launcher lets you manage multiple data directories from the splash screen: one for work, one for fiction, one for experiments. Each gets its own database and its own configuration. (In Remote mode this section retires from the stage: the remote server's data lives wherever the remote server keeps it.)
 
-You can add directories, rename them (the display name, not the path), and remove them. Removal offers two options: delete the configuration reference only (the data stays on disk), or delete the configuration *and* the data (irreversible, and the dialog will tell you so in red). In VM mode, a separate "Erase VM" button lets you destroy and recreate the virtual machine for a directory without touching your data.
+You can add directories, rename them (the display name, not the path), and remove them. Removal offers two options: delete the configuration reference only (the data stays on disk), or delete the configuration *and* the data (irreversible, and the dialog will tell you so in red).
 
 The **Auto-start with last used directory** checkbox does what it says. If checked, subsequent launches skip the splash screen entirely and go straight to startup with whichever directory you used last.
 
@@ -99,7 +97,7 @@ npm run electron:build:win         # Windows NSIS installer
 npm run electron:build:linux       # Linux AppImage + deb
 ```
 
-All build scripts run `electron:rebuild-native` before packaging. The macOS build stages Lima binaries from GitHub Releases into the app bundle via `electron:stage-lima`.
+All build scripts run `electron:rebuild-native` before packaging.
 
 ### Release Pipeline
 
@@ -121,7 +119,7 @@ In Direct mode, the Launcher downloads standalone server tarballs from GitHub Re
 
 Health checking polls the server's health endpoint with an abort callback for fatal errors — version guard blocks, migration failures, module-not-found — so the startup sequence fails fast instead of polling for two minutes against an unrecoverable state.
 
-In Docker and VM modes, the Launcher manages container/VM lifecycle through the respective platform tools, passing the selected server version tag and data directory mount. The shell bridge API (`window.quilltap`) exposes IPC methods for the splash screen renderer: directory management, runtime mode selection, version selection, retry, quit, and — as of 4.0.8 — copying generated images to the system clipboard.
+In Docker mode, the Launcher manages container lifecycle through the Docker CLI, passing the selected server version tag and data directory mount. In Remote mode it manages nothing at all — it health-checks the configured URL and points the window at it. The shell bridge API (`window.quilltap`) exposes IPC methods for the splash screen renderer: directory management, runtime mode selection, version selection, retry, quit, and — as of 4.0.8 — copying generated images to the system clipboard.
 
 ## What This Is Not
 

@@ -1,5 +1,13 @@
 # Quilltap Electron Shell Changelog
 
+## 4.2.0
+
+### Features
+
+- **The virtual machines are given a gold watch and shown to the door**: The VM runtime — Lima with Apple's Virtualization.framework on macOS, WSL2 on Windows, together with every steamer trunk the pair required — has been retired from service entirely. Gone are `lima-manager.ts`, `wsl-manager.ts`, the `IVMManager` interface that chaperoned them, the rootfs `download-manager.ts` that fetched their ~150 MB system images, the `stage-lima.ts` build step that smuggled `limactl` into the macOS bundle, the `lima/quilltap.yaml` template, the `wsl-init.sh` provisioning script, the legacy single-VM migration, the logrus-parsing apparatus that translated Lima's diary into splash-screen pleasantries, the "Erase VM" button, the per-directory VM size ledger, and the `com.apple.security.virtualization` entitlement the app no longer has any business requesting. Saved settings pointing at the departed mode are quietly re-seated at the Direct table on next launch. The Docker and Direct runtimes carry on precisely as before, unencumbered by the port-conflict pas de deux they used to dance with a VM that might be squatting on 5050.
+
+- **A third chair at the runtime table: Remote**: In the VM button's place stands a new one — Remote — for the household that already keeps a Quilltap server running somewhere and merely wants a proper window on it. Select it and the data directory list and version selector bow out (a remote server keeps its own data and knows its own version), replaced by a single address field: give it a URL and port (`http://192.168.1.20:5050`, or bare `host:port` with `http://` cheerfully assumed — https is honored too), click Start, and the shell health-checks the address and opens the main window upon it. The shell spawns nothing, stops nothing, and updates nothing in this mode: quitting the app leaves the remote server exactly as it found it, which is the entire point. Auto-start works with a saved address just as it does with a saved directory, and the chooser minds its manners about it: with Remote selected, the Start button reads **Connect** and the checkbox reads "Auto-start with connection to last Quilltap endpoint," reverting to their customary wording the moment a local runtime is chosen. The button's portrait, `runtime-remote.webp`, hangs in its appointed frame.
+
 ## 4.1.15
 
 ### Fixes

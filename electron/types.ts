@@ -1,14 +1,11 @@
-/** Runtime mode: VM (Lima/WSL2), Docker, or embedded (Electron's own Node.js) */
-export type RuntimeMode = 'docker' | 'vm' | 'embedded';
+/** Runtime mode: Docker, embedded (Electron's own Node.js), or remote (an already-running server) */
+export type RuntimeMode = 'docker' | 'embedded' | 'remote';
 
 /** Phase identifiers for splash screen state machine */
 export type SplashPhase =
   | 'choose-directory'
   | 'initializing'
   | 'downloading'
-  | 'creating-vm'
-  | 'updating-vm'
-  | 'starting-vm'
   | 'pulling-image'
   | 'starting-container'
   | 'starting-server'
@@ -39,8 +36,6 @@ export interface NamedDataDir {
 export interface DirectorySizeInfo {
   /** Size of the data directory in bytes, or -1 if unknown/missing */
   dataSize: number;
-  /** Size of the associated VM in bytes, or -1 if no VM exists */
-  vmSize: number;
 }
 
 /** Directory information sent to the splash screen */
@@ -55,14 +50,12 @@ export interface DirectoryInfo {
   sizes: Record<string, DirectorySizeInfo>;
   /** Minimum server version per directory path, read from data/quilltap.dbkey (empty string if none) */
   minServerVersions: Record<string, string>;
-  /** Current runtime mode (docker or vm) */
+  /** Current runtime mode */
   runtimeMode: RuntimeMode;
   /** Whether Docker CLI is available on this system */
   dockerAvailable: boolean;
   /** Whether the embedded server mode is available (always true — uses Electron's Node.js) */
   embeddedAvailable: boolean;
-  /** Label for the VM button (e.g. "Lima" on macOS, "WSL2" on Windows) */
-  vmLabel: string;
   /** Host platform (darwin, win32, linux) */
   platform: string;
   /** Current server version setting ('latest', 'latest-dev', or a specific tag) */
@@ -71,21 +64,13 @@ export interface DirectoryInfo {
   availableVersions: VersionOption[];
   /** Whether to show pre-release / dev versions in the version selector */
   showPrerelease: boolean;
+  /** Saved remote server URL (empty string if never configured) */
+  remoteServerUrl: string;
   /** Present when the pinned server version is older than the latest in the same channel */
   upgradeAvailable?: { from: string; to: string; toLabel: string };
 }
 
-/** Status of the VM (Lima on macOS, WSL2 on Windows) */
-export interface VMStatus {
-  exists: boolean;
-  running: boolean;
-  message: string;
-}
-
-/** @deprecated Use VMStatus instead */
-export type LimaStatus = VMStatus;
-
-/** Progress information during rootfs download */
+/** Progress information during server download */
 export interface DownloadProgress {
   phase: 'downloading';
   bytesReceived: number;
@@ -127,7 +112,7 @@ export interface SplashUpdate {
   canRetry?: boolean;
 }
 
-/** Result of a VM command execution (limactl or wsl.exe) */
+/** Result of a docker CLI command execution */
 export interface CommandResult {
   success: boolean;
   stdout: string;

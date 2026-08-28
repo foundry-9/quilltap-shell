@@ -387,24 +387,6 @@ body {
   background: rgba(99, 102, 241, 0.1);
 }
 
-.directory-item-vm-erase {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  color: #666666;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: color 0.15s, background 0.15s;
-  line-height: 1;
-}
-
-.directory-item-vm-erase:hover {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.1);
-}
-
 .directory-actions {
   margin-bottom: 10px;
   -webkit-app-region: no-drag;
@@ -592,8 +574,11 @@ body {
   background-image: url('runtime-docker.webp');
 }
 
-#runtimeVM {
-  background-image: url('runtime-vm.webp');
+#runtimeRemote {
+  /* Picture pending — falls back to the base button styling until
+     runtime-remote.webp is supplied */
+  background-image: url('runtime-remote.webp');
+  background-color: #1a2340;
 }
 
 #runtimeEmbedded {
@@ -621,6 +606,38 @@ body {
 
 .runtime-btn:disabled .runtime-btn-label {
   opacity: 0.6;
+}
+
+/* Remote server address section (shown only in remote mode) */
+.remote-section {
+  width: 100%;
+  margin-bottom: 14px;
+  -webkit-app-region: no-drag;
+}
+
+.remote-url-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #555555;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-family: monospace;
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 6px;
+  box-sizing: border-box;
+}
+
+.remote-url-input:focus {
+  border-color: #6366f1;
+}
+
+.remote-hint {
+  font-size: 11px;
+  color: #888888;
+  line-height: 1.4;
 }
 
 /* Danger button for destructive actions */

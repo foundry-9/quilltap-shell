@@ -42,7 +42,7 @@ The renderer detects shell presence by checking `typeof window.quilltap?.setDict
 
 ### Capability flag
 
-`SHELL_CAPABILITIES` in `electron/constants.ts` is the canonical list of comma-delimited flags advertised to the server via `QUILLTAP_SHELL_CAPABILITIES`. Per CLAUDE.md, that env var must flow through every launch mode (embedded, Docker `-e`, Lima template, WSL2 inherited env). Adding the flag here causes that flow automatically; no per-mode plumbing change is needed.
+`SHELL_CAPABILITIES` in `electron/constants.ts` is the canonical list of comma-delimited flags advertised to the server via `QUILLTAP_SHELL_CAPABILITIES`. Per CLAUDE.md, that env var must flow through every launch mode that spawns a server (embedded, Docker `-e`). Adding the flag here causes that flow automatically; no per-mode plumbing change is needed.
 
 Change:
 

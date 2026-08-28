@@ -1,4 +1,5 @@
 import * as http from 'http';
+import * as https from 'https';
 import {
   HEALTH_URL,
   HEALTH_POLL_INTERVAL_MS,
@@ -63,7 +64,8 @@ export class HealthChecker {
   /** Single health check attempt */
   private checkHealth(attempt: number): Promise<HealthStatus> {
     return new Promise((resolve) => {
-      const request = http.get(this.healthUrl, { timeout: 5000 }, (response) => {
+      const get = this.healthUrl.startsWith('https:') ? https.get : http.get;
+      const request = get(this.healthUrl, { timeout: 5000 }, (response) => {
         let body = '';
 
         response.on('data', (chunk: Buffer) => {

@@ -21,13 +21,18 @@ const addDirBtn = document.getElementById('addDirBtn');
 const startBtn = document.getElementById('startBtn');
 const chooserQuitBtn = document.getElementById('chooserQuitBtn');
 const autoStartCheckbox = document.getElementById('autoStartCheckbox');
+const autoStartLabelText = document.getElementById('autoStartLabelText');
 const changeDirLink = document.getElementById('changeDirLink');
 
 // Runtime mode elements
 const runtimeDockerBtn = document.getElementById('runtimeDocker');
-const runtimeVMBtn = document.getElementById('runtimeVM');
+const runtimeRemoteBtn = document.getElementById('runtimeRemote');
 const runtimeEmbeddedBtn = document.getElementById('runtimeEmbedded');
-const vmLabelEl = document.getElementById('vmLabel');
+
+// Remote server elements
+const remoteSection = document.getElementById('remoteSection');
+const remoteUrlInput = document.getElementById('remoteUrlInput');
+const dataDirSection = document.getElementById('dataDirSection');
 
 // Version selector elements
 const versionSection = document.getElementById('versionSection');
@@ -58,12 +63,6 @@ const deleteConfigOnlyBtn = document.getElementById('deleteConfigOnlyBtn');
 const deleteConfigAndDataBtn = document.getElementById('deleteConfigAndDataBtn');
 const deleteCancelBtn = document.getElementById('deleteCancelBtn');
 
-// VM erase confirmation elements
-const vmEraseOverlay = document.getElementById('vmEraseOverlay');
-const vmEraseDialogPath = document.getElementById('vmEraseDialogPath');
-const vmEraseConfirmBtn = document.getElementById('vmEraseConfirmBtn');
-const vmEraseCancelBtn = document.getElementById('vmEraseCancelBtn');
-
 /** Currently selected directory in the chooser */
 var selectedDir = '';
 
@@ -74,7 +73,7 @@ var currentSizes = {};
 var currentMinServerVersions = {};
 
 /** Current runtime mode */
-var currentRuntimeMode = 'vm';
+var currentRuntimeMode = 'embedded';
 
 /** Last known available versions (preserved across runtime mode toggles) */
 var lastAvailableVersions = [];
@@ -91,17 +90,11 @@ var pendingDeleteDir = '';
 /** Directory pending rename (path of the directory being renamed) */
 var pendingRenameDir = '';
 
-/** Directory pending VM erase */
-var pendingVMEraseDir = '';
-
 /** Phase descriptions shown to the user */
 var phaseMessages = {
   'choose-directory': 'Choose data directory',
   'initializing': 'Initializing...',
-  'downloading': 'Downloading system image...',
-  'creating-vm': 'Creating virtual machine...',
-  'updating-vm': 'Updating Quilltap to latest build...',
-  'starting-vm': 'Starting virtual machine...',
+  'downloading': 'Downloading server...',
   'pulling-image': 'Pulling Docker image...',
   'starting-container': 'Starting Docker container...',
   'starting-server': 'Starting server...',
@@ -132,18 +125,10 @@ function formatBytes(bytes) {
  */
 function formatSizeInfo(sizeInfo) {
   if (!sizeInfo) return '';
-
-  var parts = [];
   if (sizeInfo.dataSize >= 0) {
-    parts.push('Data: ' + formatBytes(sizeInfo.dataSize));
+    return 'Data: ' + formatBytes(sizeInfo.dataSize);
   }
-  if (sizeInfo.vmSize >= 0) {
-    parts.push('VM: ' + formatBytes(sizeInfo.vmSize));
-  } else {
-    parts.push('No VM');
-  }
-
-  return parts.join(' \u2022 '); // bullet separator
+  return '';
 }
 
 /** Show one UI section and hide the others */
@@ -164,15 +149,36 @@ function showSection(section) {
 /** Update the runtime mode button visual state */
 function updateRuntimeButtons() {
   runtimeDockerBtn.classList.remove('selected');
-  runtimeVMBtn.classList.remove('selected');
+  runtimeRemoteBtn.classList.remove('selected');
   runtimeEmbeddedBtn.classList.remove('selected');
 
   if (currentRuntimeMode === 'docker') {
     runtimeDockerBtn.classList.add('selected');
-  } else if (currentRuntimeMode === 'embedded') {
-    runtimeEmbeddedBtn.classList.add('selected');
+  } else if (currentRuntimeMode === 'remote') {
+    runtimeRemoteBtn.classList.add('selected');
   } else {
-    runtimeVMBtn.classList.add('selected');
+    runtimeEmbeddedBtn.classList.add('selected');
+  }
+}
+
+/**
+ * Show the sections relevant to the current runtime mode: remote mode swaps
+ * the version selector and data directory chooser for the server address
+ * field (the remote server has its own data and its own version).
+ */
+function updateModeSections() {
+  var isRemote = currentRuntimeMode === 'remote';
+  remoteSection.style.display = isRemote ? '' : 'none';
+  dataDirSection.style.display = isRemote ? 'none' : '';
+  versionSection.style.display = isRemote ? 'none' : '';
+  startBtn.textContent = isRemote ? 'Connect' : 'Start';
+  autoStartLabelText.textContent = isRemote
+    ? 'Auto-start with connection to last Quilltap endpoint'
+    : 'Auto-start with last used directory';
+  if (isRemote) {
+    upgradeBanner.classList.add('hidden');
+  } else if (pendingUpgradeVersion) {
+    upgradeBanner.classList.remove('hidden');
   }
 }
 
@@ -186,11 +192,8 @@ function updatePrereleaseCheckbox() {
   }
 }
 
-/** Update the version selector visibility and contents */
+/** Update the version selector contents */
 function updateVersionSelector(versions, serverVersion) {
-  // Show version selector for all runtime modes
-  versionSection.style.display = '';
-
   // Preserve state across calls that don't provide new data
   if (versions && versions.length > 0) lastAvailableVersions = versions;
   if (serverVersion) lastServerVersion = serverVersion;
@@ -282,19 +285,6 @@ function hideDeleteConfirmation() {
   deleteOverlay.classList.remove('visible');
 }
 
-/** Show the VM erase confirmation dialog */
-function showVMEraseConfirmation(dir) {
-  pendingVMEraseDir = dir;
-  vmEraseDialogPath.textContent = dir;
-  vmEraseOverlay.classList.add('visible');
-}
-
-/** Hide the VM erase confirmation dialog */
-function hideVMEraseConfirmation() {
-  pendingVMEraseDir = '';
-  vmEraseOverlay.classList.remove('visible');
-}
-
 /** Show the rename dialog for a directory */
 function showRenameDialog(dir) {
   pendingRenameDir = dir.path;
@@ -381,20 +371,6 @@ function renderDirectoryList(dirs, lastUsed, sizes, minServerVersions) {
     });
     item.appendChild(editBtn);
 
-    // VM erase button (only when VM mode is active and a VM exists)
-    var sizeInfo = sizes && sizes[dirPath];
-    if (currentRuntimeMode === 'vm' && sizeInfo && sizeInfo.vmSize >= 0) {
-      var vmEraseBtn = document.createElement('button');
-      vmEraseBtn.className = 'directory-item-vm-erase';
-      vmEraseBtn.textContent = '\u21BB'; // clockwise open circle arrow (reset)
-      vmEraseBtn.title = 'Erase VM...';
-      vmEraseBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        showVMEraseConfirmation(dirPath);
-      });
-      item.appendChild(vmEraseBtn);
-    }
-
     // Delete button
     var removeBtn = document.createElement('button');
     removeBtn.className = 'directory-item-remove';
@@ -453,7 +429,6 @@ window.quilltap.onUpdate(function(data) {
     progressBar.style.width = data.progress + '%';
     firstRunNote.classList.add('visible');
   } else if (
-    data.phase === 'creating-vm' || data.phase === 'updating-vm' || data.phase === 'starting-vm' ||
     data.phase === 'pulling-image' || data.phase === 'starting-container' || data.phase === 'starting-server'
   ) {
     progressContainer.classList.add('visible');
@@ -499,11 +474,8 @@ window.quilltap.onDirectories(function(data) {
   autoStartCheckbox.checked = data.autoStart;
 
   // Update runtime mode state
-  currentRuntimeMode = data.runtimeMode || 'vm';
+  currentRuntimeMode = data.runtimeMode || 'embedded';
   updateRuntimeButtons();
-
-  // On Linux there is no VM mode, so fallbacks go to the other available runtime
-  var isLinux = data.platform === 'linux';
 
   // Update Docker button availability
   if (data.dockerAvailable) {
@@ -512,7 +484,7 @@ window.quilltap.onDirectories(function(data) {
     runtimeDockerBtn.disabled = true;
     // Force away from Docker mode if Docker is not available
     if (currentRuntimeMode === 'docker') {
-      currentRuntimeMode = isLinux ? 'embedded' : 'vm';
+      currentRuntimeMode = 'embedded';
       updateRuntimeButtons();
       window.quilltap.setRuntimeMode(currentRuntimeMode);
     }
@@ -521,9 +493,9 @@ window.quilltap.onDirectories(function(data) {
   // Embedded mode is always available (uses Electron's own Node.js)
   runtimeEmbeddedBtn.disabled = false;
 
-  // Update VM label
-  if (data.vmLabel) {
-    vmLabelEl.textContent = data.vmLabel;
+  // Prefill the remote address (but never stomp on active typing)
+  if (typeof data.remoteServerUrl === 'string' && document.activeElement !== remoteUrlInput) {
+    remoteUrlInput.value = data.remoteServerUrl;
   }
 
   // Update prerelease setting and version selector
@@ -543,12 +515,7 @@ window.quilltap.onDirectories(function(data) {
     upgradeBanner.classList.add('hidden');
   }
 
-  // On Linux, hide the VM option — there is no Lima/WSL2 equivalent
-  if (data.platform === 'linux') {
-    runtimeVMBtn.style.display = 'none';
-    runtimeDockerBtn.style.flex = '1';
-    runtimeEmbeddedBtn.style.flex = '1';
-  }
+  updateModeSections();
 });
 
 /** Retry button */
@@ -582,8 +549,25 @@ addDirBtn.addEventListener('click', async function() {
 
 /** Start button */
 startBtn.addEventListener('click', function() {
+  if (currentRuntimeMode === 'remote') {
+    var url = remoteUrlInput.value.trim();
+    if (!url) {
+      remoteUrlInput.focus();
+      return;
+    }
+    window.quilltap.startRemote(url);
+    return;
+  }
   if (selectedDir) {
     window.quilltap.startWithDirectory(selectedDir);
+  }
+});
+
+/** Enter in the remote address field starts the connection */
+remoteUrlInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    startBtn.click();
   }
 });
 
@@ -602,16 +586,18 @@ runtimeDockerBtn.addEventListener('click', function() {
   if (runtimeDockerBtn.disabled) return;
   currentRuntimeMode = 'docker';
   updateRuntimeButtons();
+  updateModeSections();
   updateVersionSelector(null, null);
   window.quilltap.setRuntimeMode('docker');
 });
 
-/** Runtime mode: VM button */
-runtimeVMBtn.addEventListener('click', function() {
-  currentRuntimeMode = 'vm';
+/** Runtime mode: Remote button */
+runtimeRemoteBtn.addEventListener('click', function() {
+  currentRuntimeMode = 'remote';
   updateRuntimeButtons();
-  updateVersionSelector(null, null);
-  window.quilltap.setRuntimeMode('vm');
+  updateModeSections();
+  window.quilltap.setRuntimeMode('remote');
+  remoteUrlInput.focus();
 });
 
 /** Runtime mode: Direct (embedded) button */
@@ -619,6 +605,7 @@ runtimeEmbeddedBtn.addEventListener('click', function() {
   if (runtimeEmbeddedBtn.disabled) return;
   currentRuntimeMode = 'embedded';
   updateRuntimeButtons();
+  updateModeSections();
   updateVersionSelector(null, null);
   window.quilltap.setRuntimeMode('embedded');
 });
@@ -655,19 +642,6 @@ deleteConfigAndDataBtn.addEventListener('click', async function() {
 /** Delete confirmation: cancel */
 deleteCancelBtn.addEventListener('click', function() {
   hideDeleteConfirmation();
-});
-
-/** VM erase confirmation: confirm */
-vmEraseConfirmBtn.addEventListener('click', async function() {
-  if (pendingVMEraseDir) {
-    await window.quilltap.deleteVM(pendingVMEraseDir);
-    hideVMEraseConfirmation();
-  }
-});
-
-/** VM erase confirmation: cancel */
-vmEraseCancelBtn.addEventListener('click', function() {
-  hideVMEraseConfirmation();
 });
 
 /** Rename: save */

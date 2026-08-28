@@ -7,11 +7,9 @@ import {
   HOST_PORT,
   APP_VERSION,
   SHELL_CAPABILITIES,
-  vmNameForDir,
+  containerNameForDir,
 } from './constants';
-import { IVMManager } from './vm-manager';
-import { VMStatus, CommandResult } from './types';
-import { dirSize } from './disk-utils';
+import { CommandResult } from './types';
 
 /**
  * Resolve the host's IANA timezone name (e.g. "America/Chicago"), or null if it
@@ -99,9 +97,9 @@ function resolveDockerPath(): string {
 
 /**
  * Manages Docker container lifecycle for Quilltap.
- * Alternative to Lima/WSL2 VM backends — uses Docker Desktop or Engine.
+ * Uses Docker Desktop or Engine.
  */
-export class DockerManager implements IVMManager {
+export class DockerManager {
   private dockerPath: string;
   private dataDir: string = '';
   private imageVersion: string = APP_VERSION;
@@ -128,7 +126,7 @@ export class DockerManager implements IVMManager {
   setDataDir(hostPath: string): void {
     console.log('[DockerManager] Data directory set to:', hostPath);
     this.dataDir = hostPath;
-    this.containerName = vmNameForDir(hostPath);
+    this.containerName = containerNameForDir(hostPath);
     console.log('[DockerManager] Container name:', this.containerName);
   }
 
@@ -229,7 +227,7 @@ export class DockerManager implements IVMManager {
 
   /** Stop and remove a container for a specific data directory */
   async deleteContainerForDir(dirPath: string): Promise<void> {
-    const name = vmNameForDir(dirPath);
+    const name = containerNameForDir(dirPath);
     console.log('[DockerManager] Deleting container for dir:', dirPath, '→', name);
 
     await this.exec(['stop', name], 30_000);
@@ -242,103 +240,6 @@ export class DockerManager implements IVMManager {
 
     const result = await this.exec(['logs', '--tail', String(lines), this.containerName], 10_000);
     return result.success ? result.stdout : result.stderr;
-  }
-
-  // --- IVMManager adapter methods ---
-
-  /** Check prerequisites: verify Docker CLI is available (and permissions on Linux) */
-  async checkPrerequisites(): Promise<{ ok: boolean; error?: string }> {
-    const available = await this.isDockerAvailable();
-    if (!available) {
-      return { ok: false, error: 'Docker CLI not found' };
-    }
-
-    // On Linux, check for permission issues (user not in docker group)
-    if (process.platform === 'linux') {
-      const infoResult = await this.exec(['info'], 10_000);
-      if (!infoResult.success && (infoResult.stderr || '').toLowerCase().includes('permission denied')) {
-        return { ok: false, error: 'DOCKER_PERMISSION_DENIED' };
-      }
-    }
-
-    return { ok: true };
-  }
-
-  /** Check container status */
-  async checkStatus(): Promise<VMStatus> {
-    if (!this.containerName) {
-      return { exists: false, running: false, message: 'No container name configured' };
-    }
-
-    const result = await this.exec(
-      ['inspect', '--format', '{{.State.Status}}', this.containerName],
-      10_000,
-    );
-
-    if (!result.success) {
-      return { exists: false, running: false, message: 'Container does not exist' };
-    }
-
-    const status = result.stdout.trim();
-    const running = status === 'running';
-    return { exists: true, running, message: `Container status: ${status}` };
-  }
-
-  /** Create VM — for Docker this means pulling the image */
-  async createVM(onOutput?: (line: string) => void): Promise<CommandResult> {
-    if (!this.imageVersion) {
-      return { success: false, stdout: '', stderr: '', error: 'No image version set' };
-    }
-    return this.pullImage(this.imageVersion, onOutput);
-  }
-
-  /** Start VM — delegates to startContainer */
-  async startVM(onOutput?: (line: string) => void): Promise<CommandResult> {
-    return this.startContainer(onOutput);
-  }
-
-  /** Stop VM — delegates to stopContainer */
-  async stopVM(): Promise<CommandResult> {
-    return this.stopContainer();
-  }
-
-  /** Delete VM — stop container and remove the Docker image */
-  async deleteVM(): Promise<CommandResult> {
-    // Stop the container first
-    await this.stopContainer();
-
-    // Remove the image
-    if (!this.imageVersion) {
-      return { success: false, stdout: '', stderr: '', error: 'No image version set' };
-    }
-    const imageRef = `${DOCKER_IMAGE}:${this.imageVersion}`;
-    console.log('[DockerManager] Removing image:', imageRef);
-    return this.exec(['rmi', imageRef], 30_000);
-  }
-
-  /** Get the currently configured data directory */
-  getDataDir(): string {
-    return this.dataDir;
-  }
-
-  /** Get the VM/container name for the current data directory */
-  getVMName(): string {
-    return this.containerName;
-  }
-
-  /** Get the disk size of the Docker image in bytes (-1 if not found) */
-  async getVMDiskSize(): Promise<number> {
-    if (!this.imageVersion) return -1;
-    const imageRef = `${DOCKER_IMAGE}:${this.imageVersion}`;
-    const result = await this.exec(['image', 'inspect', '--format', '{{.Size}}', imageRef], 10_000);
-    if (!result.success) return -1;
-    const size = parseInt(result.stdout.trim(), 10);
-    return isNaN(size) ? -1 : size;
-  }
-
-  /** Get the disk size of the data directory in bytes (-1 if missing) */
-  async getDataDirDiskSize(): Promise<number> {
-    return dirSize(this.dataDir);
   }
 
   /**

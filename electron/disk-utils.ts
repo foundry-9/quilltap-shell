@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { LIMA_HOME, vmNameForDir } from './constants';
 import { DirectorySizeInfo } from './types';
 
 /**
@@ -33,17 +32,10 @@ export function dirSize(dirPath: string): number {
 }
 
 /**
- * Calculate both data directory and VM disk sizes for a given data directory.
+ * Calculate the data directory disk size for a given data directory.
  */
 export function getSizesForDir(dataDir: string): DirectorySizeInfo {
-  const dataSize = dirSize(dataDir);
-
-  // Check for a Lima VM associated with this directory
-  const vmName = vmNameForDir(dataDir);
-  const vmDir = path.join(LIMA_HOME, vmName);
-  const vmSize = dirSize(vmDir);
-
-  return { dataSize, vmSize };
+  return { dataSize: dirSize(dataDir) };
 }
 
 /**

@@ -12,8 +12,10 @@ export interface AppSettings {
   knownDataDirs: NamedDataDir[];
   /** Whether to auto-start with lastDataDir (skip chooser) */
   autoStart: boolean;
-  /** Runtime mode: 'docker', 'vm' (Lima/WSL2), or 'embedded' (Electron's Node.js) */
+  /** Runtime mode: 'docker', 'embedded' (Electron's Node.js), or 'remote' (already-running server) */
   runtimeMode: RuntimeMode;
+  /** URL of an already-running server for 'remote' mode (e.g. http://192.168.1.20:5050) */
+  remoteServerUrl: string;
   /** Server version to download: 'latest', 'latest-dev', or a specific semver tag */
   serverVersion: string;
   /** Version tag the user declined to upgrade to (suppresses the prompt until a newer version appears) */
@@ -36,7 +38,8 @@ function defaultSettings(): AppSettings {
     lastDataDir: DEFAULT_DATA_DIR,
     knownDataDirs: [{ path: DEFAULT_DATA_DIR, name: 'Default' }],
     autoStart: false,
-    runtimeMode: process.platform === 'linux' ? 'docker' : 'vm',
+    runtimeMode: process.platform === 'linux' ? 'docker' : 'embedded',
+    remoteServerUrl: '',
     serverVersion: 'latest',
     declinedServerVersion: '',
     declinedShellVersion: '',
@@ -77,14 +80,17 @@ export function loadSettings(): AppSettings {
         }
       }
 
-      // Migrate old 'npx' runtime mode to 'embedded'
+      // Migrate old 'npx' and 'vm' (Lima/WSL2, since removed) modes to 'embedded'
       let runtimeMode: RuntimeMode;
       const savedMode = parsed.runtimeMode;
-      if (process.platform === 'linux') {
-        runtimeMode = (savedMode === 'embedded' || savedMode === 'npx') ? 'embedded' : 'docker';
+      if (savedMode === 'docker') {
+        runtimeMode = 'docker';
+      } else if (savedMode === 'remote') {
+        runtimeMode = 'remote';
+      } else if (savedMode === 'embedded' || savedMode === 'npx' || savedMode === 'vm') {
+        runtimeMode = 'embedded';
       } else {
-        runtimeMode = savedMode === 'docker' ? 'docker'
-          : (savedMode === 'embedded' || savedMode === 'npx') ? 'embedded' : 'vm';
+        runtimeMode = defaults.runtimeMode;
       }
 
       return {
@@ -92,6 +98,7 @@ export function loadSettings(): AppSettings {
         knownDataDirs,
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
         runtimeMode,
+        remoteServerUrl: typeof parsed.remoteServerUrl === 'string' ? parsed.remoteServerUrl : defaults.remoteServerUrl,
         serverVersion: typeof parsed.serverVersion === 'string' ? parsed.serverVersion : defaults.serverVersion,
         declinedServerVersion: typeof parsed.declinedServerVersion === 'string' ? parsed.declinedServerVersion : defaults.declinedServerVersion,
         declinedShellVersion: typeof parsed.declinedShellVersion === 'string' ? parsed.declinedShellVersion : defaults.declinedShellVersion,
