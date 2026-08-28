@@ -35,7 +35,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   # Electron builds — compile TypeScript, rebuild native modules for each
   # platform's Electron ABI, package with electron-builder.
-  # macOS also stages Lima binaries and handles code signing + notarization.
+  # macOS also handles code signing + notarization.
   # ────────────────────────────────────────────────────────────────────────────
   build-electron-mac:
     name: Build Electron (macOS)
@@ -66,11 +66,6 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
         run: npx tsx scripts/release/write-apple-api-key.ts
-
-      - name: Stage Lima binaries
-        env:
-          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
-        run: npx tsx scripts/stage-lima.ts
 
       - name: Rebuild native modules for Electron
         run: npx tsx scripts/rebuild-native-modules.ts

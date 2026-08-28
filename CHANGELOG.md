@@ -2,6 +2,10 @@
 
 ## 4.2.0
 
+### Fixes
+
+- **The departed valet is struck from the call sheet**: The same housecleaning that dismissed `stage-lima.ts` neglected to inform the release workflow, which went on ringing for it — `.github/workflows/release.yml` still carried a `Stage Lima binaries` step invoking a script no longer in the building. The macOS job accordingly expired twenty-eight seconds in on `ERR_MODULE_NOT_FOUND`, never reaching the native rebuild, the compile, or electron-builder; Windows and Linux, who had never been introduced to Lima, built without incident. The `create-release` job then declined the whole affair on the entirely reasonable grounds that no macOS installer had been produced, so 4.2.0 failed to make it out the door at all. The step is removed and the job's header comment no longer advertises a service macOS has ceased to offer.
+
 ### Features
 
 - **The virtual machines are given a gold watch and shown to the door**: The VM runtime — Lima with Apple's Virtualization.framework on macOS, WSL2 on Windows, together with every steamer trunk the pair required — has been retired from service entirely. Gone are `lima-manager.ts`, `wsl-manager.ts`, the `IVMManager` interface that chaperoned them, the rootfs `download-manager.ts` that fetched their ~150 MB system images, the `stage-lima.ts` build step that smuggled `limactl` into the macOS bundle, the `lima/quilltap.yaml` template, the `wsl-init.sh` provisioning script, the legacy single-VM migration, the logrus-parsing apparatus that translated Lima's diary into splash-screen pleasantries, the "Erase VM" button, the per-directory VM size ledger, and the `com.apple.security.virtualization` entitlement the app no longer has any business requesting. Saved settings pointing at the departed mode are quietly re-seated at the Direct table on next launch. The Docker and Direct runtimes carry on precisely as before, unencumbered by the port-conflict pas de deux they used to dance with a VM that might be squatting on 5050.
