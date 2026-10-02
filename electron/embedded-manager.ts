@@ -3,12 +3,43 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { HOST_PORT, STANDALONE_CACHE_DIR, APP_VERSION, SHELL_CAPABILITIES } from './constants';
 
-/** Append a line to the embedded server log file in the data directory */
+const SERVER_LOG_NAME = 'embedded-server.log';
+/** Rotate once the live log reaches this size */
+const SERVER_LOG_MAX_BYTES = 10 * 1024 * 1024;
+/** Total log files kept: the live log plus numbered archives `.1` … `.9` */
+const SERVER_LOG_MAX_FILES = 10;
+
+/** Tracked size of each live log file, so we don't stat on every line */
+const serverLogSizes = new Map<string, number>();
+
+/** Shift `log.N` → `log.N+1` (dropping the oldest), then the live log → `log.1` */
+function rotateServerLog(logPath: string): void {
+  for (let i = SERVER_LOG_MAX_FILES - 1; i >= 1; i--) {
+    const src = i === 1 ? logPath : `${logPath}.${i - 1}`;
+    const dest = `${logPath}.${i}`;
+    if (fs.existsSync(src)) fs.renameSync(src, dest);
+  }
+}
+
+/** Append a line to the embedded server log file in the data directory, rotating by size */
 function appendServerLog(dataDir: string, line: string): void {
   try {
     const logDir = path.join(dataDir, 'logs');
     if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-    fs.appendFileSync(path.join(logDir, 'embedded-server.log'), line + '\n');
+    const logPath = path.join(logDir, SERVER_LOG_NAME);
+    const entry = line + '\n';
+
+    let size = serverLogSizes.get(logPath);
+    if (size === undefined) {
+      size = fs.existsSync(logPath) ? fs.statSync(logPath).size : 0;
+    }
+    if (size > 0 && size + Buffer.byteLength(entry) > SERVER_LOG_MAX_BYTES) {
+      rotateServerLog(logPath);
+      size = 0;
+    }
+
+    fs.appendFileSync(logPath, entry);
+    serverLogSizes.set(logPath, size + Buffer.byteLength(entry));
   } catch {
     // Best-effort logging
   }

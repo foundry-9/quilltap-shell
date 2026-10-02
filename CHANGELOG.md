@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.2.1
+
+### Fixes
+
+- **The embedded server's diary is no longer permitted to grow without end**: `embedded-server.log`, into which the shell faithfully copies every line the embedded server utters on stdout and stderr, had been kept as a single ledger, appended to forever and pruned never — a volume that, left to a chatty server and a long uptime, would cheerfully swell to fill whatever shelf it was given. `appendServerLog()` in `embedded-manager.ts` now retires the ledger once it reaches 10 MB: the live file becomes `embedded-server.log.1`, its elders each step one number down the line, and `embedded-server.log.9` is shown out entirely, so no more than ten volumes — the live log plus nine archives, 100 MB at the outside — are ever kept on the premises. The running size is tallied in memory rather than by measuring the file on every line, so the bookkeeping costs next to nothing.
+
 ## 4.2.0
 
 ### Fixes
