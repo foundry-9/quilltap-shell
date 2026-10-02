@@ -6,6 +6,12 @@
 
 - **The embedded server's diary is no longer permitted to grow without end**: `embedded-server.log`, into which the shell faithfully copies every line the embedded server utters on stdout and stderr, had been kept as a single ledger, appended to forever and pruned never — a volume that, left to a chatty server and a long uptime, would cheerfully swell to fill whatever shelf it was given. `appendServerLog()` in `embedded-manager.ts` now retires the ledger once it reaches 10 MB: the live file becomes `embedded-server.log.1`, its elders each step one number down the line, and `embedded-server.log.9` is shown out entirely, so no more than ten volumes — the live log plus nine archives, 100 MB at the outside — are ever kept on the premises. The running size is tallied in memory rather than by measuring the file on every line, so the bookkeeping costs next to nothing.
 
+- **The native-module rebuild stops tripping over the guest list it was handed at the door**: `npm run` thoughtfully exports one's user-level npm configuration into the environment as `npm_config_*` variables, and among them, for anyone whose `~/.npmrc` keeps an `allow-scripts` list, rides `npm_config_allow_scripts`. The `npm install` that `scripts/rebuild-native-modules.ts` dispatches to fetch the platform's sharp binaries inherited that variable, mistook it for an `--allow-scripts` flag shouted from the command line, and — npm 11.18 having lately decided that project installs may consult only the project's own `allowScripts` — refused with `EALLOWSCRIPTS`, halting every local build before electron-builder was so much as rung for. The script now strips that one variable from the environment it hands its children, so the nested install takes its instructions from `package.json` as the new etiquette demands.
+
+### Dependencies
+
+- **A fresh pressing of the household staples**: `sharp` is brought up to 0.35.5 (still well within the server's `^0.35.4`, as the alignment guard is pleased to confirm) and `electron` to 41.10.7, the 41.x ceiling remaining firmly in place. `package.json` also acquires an `allowScripts` list — `electron`, `better-sqlite3-multiple-ciphers`, and `electron-winstaller`, each pinned to its exact version — so that npm 11.18's new insistence on a written guest list for install scripts is met by the project itself rather than by whatever a given developer happens to keep in `~/.npmrc`.
+
 ## 4.2.0
 
 ### Fixes

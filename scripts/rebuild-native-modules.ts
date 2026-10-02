@@ -31,10 +31,19 @@ import { join } from 'path';
 
 const PROJECT_ROOT = join(__dirname, '..');
 
+// `npm run` exports user-level npm config into the environment as
+// `npm_config_*`. A nested `npm install` treats an inherited
+// `npm_config_allow_scripts` as if `--allow-scripts` were passed on the command
+// line, which npm 11.18+ rejects in project installs (EALLOWSCRIPTS). Drop it so
+// the project's own `allowScripts` in package.json governs the nested install.
+const childEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'npm_config_allow_scripts'),
+);
+
 function run(cmd: string, description: string, cwd?: string): void {
   console.log(`> ${description}`);
   try {
-    execSync(cmd, { stdio: 'inherit', cwd: cwd || PROJECT_ROOT, env: process.env });
+    execSync(cmd, { stdio: 'inherit', cwd: cwd || PROJECT_ROOT, env: childEnv });
   } catch {
     console.error(`Failed: ${description}`);
     process.exit(1);

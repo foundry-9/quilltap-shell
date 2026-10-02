@@ -32,7 +32,7 @@
   "dependencies": {
     "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.11.1",
     "electron-updater": "^6.8.9",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
     "tar": "^7.5.22",
     "yauzl": "^3.4.0"
   },
@@ -41,9 +41,14 @@
     "@electron/rebuild": "^4.2.0",
     "@types/semver": "^7.8.0",
     "cross-env": "^10.1.0",
-    "electron": "^41.10.5",
+    "electron": "^41.10.7",
     "electron-builder": "^26.15.3",
     "semver": "^7.8.5",
     "typescript": "^6.0.3"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true,
+    "better-sqlite3-multiple-ciphers@12.11.1": true,
+    "electron@41.10.7": true
   }
 }
