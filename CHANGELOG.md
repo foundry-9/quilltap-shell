@@ -1,5 +1,11 @@
 # Quilltap Electron Shell Changelog
 
+## 4.2.2
+
+### Fixes
+
+- **The shell no longer stands forty seconds in the hall waiting on a butler who has nodded off**: Before starting the embedded server, the shell politely asks Docker to stop and remove any container that might be squatting on the port — a sensible precaution, save that it asked unconditionally, with a 30-second allowance for `docker stop` and a further 10 for `docker rm -f`. When Docker Desktop is installed and its socket present but the daemon behind it has gone glassy-eyed — accepting the knock, answering never — both calls sat out their full timeouts, and the splash screen read "Preparing to start server..." for a dependable forty seconds before any downloading or starting was attempted. `DockerManager` now first inquires, via `docker container inspect` with a five-second fuse, whether the container exists at all; if the answer is no, or no answer comes, the stop and remove are skipped entirely. The same courtesy applies when a data directory's container is deleted, and when Docker mode stops its container on quit.
+
 ## 4.2.1
 
 ### Fixes

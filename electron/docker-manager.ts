@@ -210,19 +210,23 @@ export class DockerManager {
     return this.exec(args, 60_000, onOutput);
   }
 
+  /**
+   * Check whether a container exists, with a short timeout. A Docker daemon
+   * that is absent, stopped, or wedged (socket accepts but never answers)
+   * all report false here, so callers can skip the slow stop/rm calls.
+   */
+  private async containerExists(name: string): Promise<boolean> {
+    const result = await this.exec(['container', 'inspect', '--format', '{{.Id}}', name], 5_000);
+    return result.success;
+  }
+
   /** Stop and remove the current container */
   async stopContainer(): Promise<CommandResult> {
     if (!this.containerName) {
       return { success: true, stdout: '', stderr: '', error: undefined };
     }
 
-    console.log('[DockerManager] Stopping container:', this.containerName);
-
-    // Stop gracefully (10s timeout built into docker stop)
-    await this.exec(['stop', this.containerName], 30_000);
-
-    // Remove the container
-    return this.exec(['rm', '-f', this.containerName], 10_000);
+    return this.removeContainer(this.containerName);
   }
 
   /** Stop and remove a container for a specific data directory */
@@ -230,8 +234,23 @@ export class DockerManager {
     const name = containerNameForDir(dirPath);
     console.log('[DockerManager] Deleting container for dir:', dirPath, '→', name);
 
+    await this.removeContainer(name);
+  }
+
+  /** Stop and remove a named container, skipping both if it doesn't exist */
+  private async removeContainer(name: string): Promise<CommandResult> {
+    if (!(await this.containerExists(name))) {
+      console.log('[DockerManager] No container to stop (or Docker unresponsive):', name);
+      return { success: true, stdout: '', stderr: '', error: undefined };
+    }
+
+    console.log('[DockerManager] Stopping container:', name);
+
+    // Stop gracefully (10s timeout built into docker stop)
     await this.exec(['stop', name], 30_000);
-    await this.exec(['rm', '-f', name], 10_000);
+
+    // Remove the container
+    return this.exec(['rm', '-f', name], 10_000);
   }
 
   /** Get recent container logs */
