@@ -26,6 +26,7 @@ export class HealthChecker {
     onProgress?: (status: HealthStatus) => void,
     shouldAbort?: () => string | null,
   ): Promise<HealthStatus> {
+    let lastError: string | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       // Check if caller wants to abort early (e.g. fatal error detected)
       if (shouldAbort) {
@@ -40,6 +41,7 @@ export class HealthChecker {
       }
 
       const status = await this.checkHealth(attempt);
+      lastError = status.error;
 
       if (onProgress) {
         onProgress(status);
@@ -57,7 +59,7 @@ export class HealthChecker {
     return {
       status: 'unreachable',
       attempts: maxAttempts,
-      error: `Health check timed out after ${maxAttempts} attempts`,
+      error: lastError ?? `Health check timed out after ${maxAttempts} attempts`,
     };
   }
 

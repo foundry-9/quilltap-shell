@@ -11,6 +11,7 @@ import {
   DEFAULT_DATA_DIR,
   APP_VERSION,
   DOCKER_IMAGE,
+  HEALTH_MAX_ATTEMPTS,
 } from './constants';
 import { DockerManager } from './docker-manager';
 import { EmbeddedManager } from './embedded-manager';
@@ -794,11 +795,11 @@ async function devStartupSequence(): Promise<void> {
     message: 'Connecting to dev server...',
   });
 
-  const status = await healthChecker.waitForHealthy(30, 1000, (s) => {
+  const devMaxAttempts = 30;
+  const status = await healthChecker.waitForHealthy(devMaxAttempts, 1000, (s) => {
     sendSplashUpdate({
       phase: 'waiting-health',
-      message: `Waiting for dev server... (attempt ${s.attempts})`,
-      detail: s.error || '',
+      message: `Waiting for dev server... (${s.attempts}/${devMaxAttempts})`,
     });
   });
 
@@ -845,11 +846,12 @@ async function remoteStartupSequence(): Promise<void> {
   });
 
   const remoteChecker = new HealthChecker(`${url}/api/health`);
-  const healthStatus = await remoteChecker.waitForHealthy(15, 1000, (s) => {
+  const remoteMaxAttempts = 15;
+  const healthStatus = await remoteChecker.waitForHealthy(remoteMaxAttempts, 1000, (s) => {
     sendSplashUpdate({
       phase: 'waiting-health',
-      message: `Waiting for server... (attempt ${s.attempts})`,
-      detail: s.error || url,
+      message: `Waiting for server... (${s.attempts}/${remoteMaxAttempts})`,
+      detail: url,
     });
   });
 
@@ -1053,8 +1055,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
   const healthStatus = await healthChecker.waitForHealthy(undefined, undefined, (s) => {
     sendSplashUpdate({
       phase: 'waiting-health',
-      message: `Waiting for server... (attempt ${s.attempts})`,
-      detail: s.error || '',
+      message: `Waiting for server... (${s.attempts}/${HEALTH_MAX_ATTEMPTS})`,
     });
   });
 
@@ -1075,7 +1076,9 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
   } else {
     const logs = await dockerManager.getLogs(20);
     sendSplashError(
-      `Server did not become healthy after ${healthStatus.attempts} attempts.\n\nRecent logs:\n${logs}`,
+      `Server did not become healthy after ${healthStatus.attempts} attempts.` +
+      (healthStatus.error ? `\n\nLast error: ${healthStatus.error}` : '') +
+      `\n\nRecent logs:\n${logs}`,
       true
     );
     closeStartupLog();
@@ -1277,8 +1280,7 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
   const healthStatus = await healthChecker.waitForHealthy(undefined, undefined, (s) => {
     sendSplashUpdate({
       phase: 'waiting-health',
-      message: `Waiting for server... (attempt ${s.attempts})`,
-      detail: s.error || '',
+      message: `Waiting for server... (${s.attempts}/${HEALTH_MAX_ATTEMPTS})`,
     });
   }, () => serverFatalError);
 
@@ -1299,7 +1301,8 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
   } else {
     const errorDetail = serverFatalError
       ? `Server reported a fatal error:\n\n${serverFatalError}`
-      : `Server did not become healthy after ${healthStatus.attempts} attempts.`;
+      : `Server did not become healthy after ${healthStatus.attempts} attempts.` +
+        (healthStatus.error ? `\n\nLast error: ${healthStatus.error}` : '');
     const recentLines = embeddedManager.getRecentOutput(15);
     const recentText = recentLines.length > 0
       ? `\n\nRecent server output:\n${recentLines.join('\n')}`

@@ -1,5 +1,13 @@
 # Quilltap Electron Shell Changelog
 
+## 4.2.4
+
+### Changes
+
+- **The quill is taught to stand behind its own name, as a good quill should**: On both the chooser and the loading screen, the quill had been keeping a timid half-inch from the word "Quilltap", like a guest unsure whether he had been introduced. It now tucks itself well in, its feather rising behind the "Q" and its nib peeping out below, with the lettering firmly in front. Neither party has been resized; they have merely been persuaded to stand closer.
+
+- **The loading screen stops crying wolf on every knock at the door**: While the server dressed for dinner, the splash screen announced "Connection refused" beneath its progress bar on every poll, which, to the untrained eye, read rather like a death notice for a patient who was merely running late. The per-attempt error is now kept to itself until the shell truly gives up, at which point the last complaint appears in the failure message as "Last error: …" (in Docker and Direct modes as well as Remote). The counter, likewise, no longer reads "(attempt 1)" with the open-ended menace of a man counting his own heartbeats, but "(1/60)" — or whatever the ceiling happens to be — so that a long wait is seen for what it is: progress, not peril.
+
 ## 4.2.3
 
 ### Fixes
