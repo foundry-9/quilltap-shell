@@ -2,7 +2,7 @@
 /**
  * Rebuild Native Modules for Electron
  *
- * Installs the correct platform-specific sharp binaries and rebuilds
+ * Installs the correct platform-specific sharp and @napi-rs/canvas binaries and rebuilds
  * better-sqlite3 (via better-sqlite3-multiple-ciphers) so that native modules
  * in the packaged Electron app match Electron's Node ABI.
  *
@@ -13,11 +13,11 @@
  * At runtime, the standalone download manager copies these modules into the
  * downloaded server's node_modules so they can be loaded via ELECTRON_RUN_AS_NODE.
  *
- * ORDER MATTERS. The sharp step shells out to `npm install`, which re-resolves
+ * ORDER MATTERS. The prebuilt-binary step shells out to `npm install`, which re-resolves
  * the dependency tree and will happily reinstall better-sqlite3 from its plain-
  * Node prebuild (the wrong ABI), silently clobbering a freshly compiled binary.
  * That is exactly how releases 4.1.5–4.1.11 shipped a NODE_MODULE_VERSION 127
- * better_sqlite3.node into an Electron that wanted 145. So sharp is installed
+ * better_sqlite3.node into an Electron that wanted 145. So prebuilts are installed
  * FIRST, better-sqlite3 is compiled LAST, and a final ABI guard loads the result
  * under Electron to guarantee nothing reverted it.
  *
@@ -64,72 +64,103 @@ console.log(`    Electron: ${electronVersion}`);
 console.log(`    Arch:     ${targetArch}`);
 console.log('');
 
-// Step 1: Install correct platform-specific sharp binaries
+// Step 1: Install correct platform-specific prebuilt binaries
 //
-// sharp is distributed as prebuilt platform binaries (it is not compiled here),
-// so we select the right @img/* packages. This runs FIRST because the npm
-// install below re-resolves the whole tree and would clobber a better-sqlite3
-// rebuild. sharp's binaries are N-API, so they are ABI-independent across Node
-// and Electron versions and need no rebuild.
-console.log('==> Step 1/2: Installing platform-specific sharp binaries');
+// sharp and @napi-rs/canvas are distributed as prebuilt N-API binaries in
+// per-platform packages (they are not compiled here), so we select the right
+// ones. N-API binaries are ABI-independent across Node and Electron versions
+// and need no rebuild. This runs FIRST because the npm install below
+// re-resolves the whole tree and would clobber a better-sqlite3 rebuild.
+console.log('==> Step 1/2: Installing platform-specific prebuilt binaries');
 
-const sharpPkgPath = join(PROJECT_ROOT, 'node_modules', 'sharp', 'package.json');
-if (!existsSync(sharpPkgPath)) {
-  console.error('    ERROR: sharp not found in node_modules');
-  process.exit(1);
-}
+const targetPlatform = process.platform;
 
-const sharpPkg = JSON.parse(readFileSync(sharpPkgPath, 'utf-8'));
-const sharpPlatform = process.platform === 'win32' ? 'win32' : process.platform;
+// @napi-rs/canvas suffixes its platform packages with the toolchain/libc;
+// Electron ships for MSVC on Windows and glibc on Linux.
+const canvasTarget =
+  targetPlatform === 'win32' ? `win32-${targetArch}-msvc`
+  : targetPlatform === 'linux' ? `linux-${targetArch}-gnu`
+  : `${targetPlatform}-${targetArch}`;
 
-// Determine which @img packages we need
+// Each entry: the wrapper package, the scope directory its platform packages
+// live in, the prefix those packages share, and how to recognise the ones this
+// platform needs.
+const PREBUILT_MODULES: Array<{
+  wrapper: string;
+  scope: string;
+  binaryPrefix: string;
+  isTargetPackage: (name: string) => boolean;
+}> = [
+  {
+    wrapper: 'sharp',
+    scope: '@img',
+    binaryPrefix: 'sharp-',
+    // Matches both sharp-<platform>-<arch> and sharp-libvips-<platform>-<arch>.
+    isTargetPackage: (name) => name.includes(`${targetPlatform}-${targetArch}`),
+  },
+  {
+    wrapper: '@napi-rs/canvas',
+    scope: '@napi-rs',
+    binaryPrefix: 'canvas-',
+    isTargetPackage: (name) => name === `@napi-rs/canvas-${canvasTarget}`,
+  },
+];
+
+console.log(`    Platform: ${targetPlatform}-${targetArch}`);
+
 const requiredPackages: { name: string; version: string }[] = [];
-const optDeps: Record<string, string> = sharpPkg.optionalDependencies || {};
-for (const [name, ver] of Object.entries(optDeps)) {
-  if (name.includes(`${sharpPlatform}-${targetArch}`)) {
-    requiredPackages.push({ name, version: ver });
+for (const { wrapper, scope, binaryPrefix, isTargetPackage } of PREBUILT_MODULES) {
+  const wrapperPkgPath = join(PROJECT_ROOT, 'node_modules', ...wrapper.split('/'), 'package.json');
+  if (!existsSync(wrapperPkgPath)) {
+    console.error(`    ERROR: ${wrapper} not found in node_modules`);
+    process.exit(1);
   }
-}
 
-if (requiredPackages.length === 0) {
-  console.warn(`    WARNING: No sharp platform packages found for ${sharpPlatform}-${targetArch}`);
-} else {
-  console.log(`    Platform: ${sharpPlatform}-${targetArch}`);
-  console.log(`    Packages: ${requiredPackages.map(p => p.name).join(', ')}`);
+  const optDeps: Record<string, string> =
+    JSON.parse(readFileSync(wrapperPkgPath, 'utf-8')).optionalDependencies || {};
+  const modulePackages = Object.entries(optDeps)
+    .filter(([name]) => isTargetPackage(name))
+    .map(([name, version]) => ({ name, version }));
 
-  // Remove wrong-platform @img packages
-  const imgDir = join(PROJECT_ROOT, 'node_modules', '@img');
-  if (existsSync(imgDir)) {
-    for (const entry of readdirSync(imgDir)) {
-      if (entry.startsWith('sharp-') && !entry.includes(`${sharpPlatform}-${targetArch}`)) {
-        const fullPath = join(imgDir, entry);
-        console.log(`    Removing wrong-platform: @img/${entry}`);
-        rmSync(fullPath, { recursive: true, force: true });
+  if (modulePackages.length === 0) {
+    console.error(`    ERROR: No ${wrapper} platform packages found for ${targetPlatform}-${targetArch}`);
+    process.exit(1);
+  }
+  console.log(`    ${wrapper}: ${modulePackages.map(p => p.name).join(', ')}`);
+  requiredPackages.push(...modulePackages);
+
+  // Remove wrong-platform packages
+  const scopeDir = join(PROJECT_ROOT, 'node_modules', scope);
+  if (existsSync(scopeDir)) {
+    for (const entry of readdirSync(scopeDir)) {
+      if (entry.startsWith(binaryPrefix) && !isTargetPackage(`${scope}/${entry}`)) {
+        console.log(`    Removing wrong-platform: ${scope}/${entry}`);
+        rmSync(join(scopeDir, entry), { recursive: true, force: true });
       }
     }
   }
+}
 
-  // Install correct platform packages
-  const installSpecs = requiredPackages.map(p => `${p.name}@${p.version}`).join(' ');
-  run(
-    `npm install --no-save --no-package-lock ${installSpecs}`,
-    `Installing sharp binaries for ${sharpPlatform}-${targetArch}`,
-  );
+// Install correct platform packages in one pass, so no install prunes another's
+const installSpecs = requiredPackages.map(p => `${p.name}@${p.version}`).join(' ');
+run(
+  `npm install --no-save --no-package-lock ${installSpecs}`,
+  `Installing prebuilt binaries for ${targetPlatform}-${targetArch}`,
+);
 
-  // Verify
-  let allFound = true;
-  for (const pkg of requiredPackages) {
-    const pkgDir = join(PROJECT_ROOT, 'node_modules', ...pkg.name.split('/'));
-    if (!existsSync(pkgDir)) {
-      console.error(`    ERROR: ${pkg.name} not found after install`);
-      allFound = false;
-    }
+// Verify
+let allFound = true;
+for (const pkg of requiredPackages) {
+  const pkgDir = join(PROJECT_ROOT, 'node_modules', ...pkg.name.split('/'));
+  if (!existsSync(pkgDir)) {
+    console.error(`    ERROR: ${pkg.name} not found after install`);
+    allFound = false;
   }
-  if (allFound) {
-    console.log('    ✓ Sharp platform binaries installed');
-  } else {
-    process.exit(1);
-  }
+}
+if (allFound) {
+  console.log('    ✓ Prebuilt platform binaries installed');
+} else {
+  process.exit(1);
 }
 
 // Step 2: Rebuild better-sqlite3 (aliased as better-sqlite3-multiple-ciphers)

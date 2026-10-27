@@ -287,21 +287,57 @@ export class StandaloneDownloadManager {
     console.log(`[StandaloneDownloadManager] sharp resolved to: ${sharpDir ?? 'null'}`);
     copyModule('sharp', sharpDir, true);
 
-    // Copy all @img packages (platform-specific sharp binaries + shared deps like @img/colour)
-    if (sharpDir) {
-      const sharpParent = path.dirname(sharpDir);
-      const imgDir = path.join(sharpParent, '@img');
-      if (fs.existsSync(imgDir)) {
-        try {
-          const imgPackages = fs.readdirSync(imgDir);
-          for (const pkg of imgPackages) {
-            copyModule(`@img/${pkg}`, path.join(imgDir, pkg), true);
+    // Copy the packages in `scopeDir` whose names start with `prefix` (the
+    // platform-specific binary packages of a prebuilt N-API module).
+    const copyScopePackages = (scopeDir: string, scope: string, prefix = ''): void => {
+      if (!fs.existsSync(scopeDir)) return;
+      try {
+        for (const pkg of fs.readdirSync(scopeDir)) {
+          if (pkg.startsWith(prefix)) {
+            copyModule(`${scope}/${pkg}`, path.join(scopeDir, pkg), true);
           }
-        } catch {
-          // Non-fatal
         }
+      } catch {
+        // Non-fatal
       }
+    };
+
+    // Copy all @img packages (platform-specific sharp binaries + shared deps like @img/colour)
+    if (sharpDir) copyScopePackages(path.join(path.dirname(sharpDir), '@img'), '@img');
+
+    // Copy @napi-rs/canvas (pdfjs-dist's DOMMatrix/canvas backend) and its
+    // platform-specific Skia binary package. The tarball strips the latter.
+    const canvasDir = this.resolveModuleDir('@napi-rs/canvas');
+    console.log(`[StandaloneDownloadManager] @napi-rs/canvas resolved to: ${canvasDir ?? 'null'}`);
+    copyModule('@napi-rs/canvas', canvasDir, true);
+    if (canvasDir) copyScopePackages(path.dirname(canvasDir), '@napi-rs', 'canvas-');
+
+    // Version checks can't tell whether injection actually landed (a silent
+    // resolution failure is how 4.1.14 shipped a binary-less sharp), so
+    // confirm each prebuilt binary is physically present in the cache.
+    this.warnIfNativeBinaryMissing(standaloneNodeModules, '@img', 'sharp-');
+    this.warnIfNativeBinaryMissing(standaloneNodeModules, '@napi-rs', 'canvas-');
+  }
+
+  /**
+   * Log a warning when no package in `scope` starting with `prefix` carries a
+   * `.node` binary in the standalone cache.
+   */
+  private warnIfNativeBinaryMissing(nodeModulesDir: string, scope: string, prefix: string): void {
+    const scopeDir = path.join(nodeModulesDir, scope);
+    try {
+      for (const pkg of fs.readdirSync(scopeDir)) {
+        if (!pkg.startsWith(prefix)) continue;
+        const pkgDir = path.join(scopeDir, pkg);
+        const hasBinary = (dir: string): boolean =>
+          fs.readdirSync(dir, { withFileTypes: true }).some((entry) =>
+            entry.isDirectory() ? hasBinary(path.join(dir, entry.name)) : entry.name.endsWith('.node'));
+        if (hasBinary(pkgDir)) return;
+      }
+    } catch {
+      // Scope directory absent — fall through to the warning
     }
+    console.warn(`[StandaloneDownloadManager] No native ${scope}/${prefix}* binary present after injection`);
   }
 
   /**

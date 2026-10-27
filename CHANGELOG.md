@@ -1,5 +1,13 @@
 # Quilltap Electron Shell Changelog
 
+## 4.2.3
+
+### Fixes
+
+- **The PDF reader is at last furnished with the spectacles it was promised**: Since the server's 4.4.0, `pdfjs-dist` has looked to `@napi-rs/canvas` for its canvas and `DOMMatrix` machinery, and the standalone tarball — quite properly, the thing being platform-specific — packs only the gentleman's calling card and leaves his Skia binary at home, trusting whoever unpacks it to supply the right one. The shell, alas, was never told: it fetched sharp's binaries and better-sqlite3's, and left `@napi-rs/canvas` standing in the cache as a wrapper with nothing behind it. pdfjs, too well-bred to make a scene, swallowed the failed `require` and carried on short-sighted, and the server's newly in-house PDF text reader inherited the squint. The shell now carries `@napi-rs/canvas` as a dependency; `scripts/rebuild-native-modules.ts` selects its platform package (`darwin-*`, `win32-*-msvc`, `linux-*-gnu`) in the same single `npm install` that fetches sharp's, removing any for the wrong platform; and `linkNativeModules()` copies both wrapper and binary into the extracted server on every embedded boot. Having learned from the 4.1.14 affair that a version that matches is not the same as a binary that arrived, the shell also now warns in the log whenever no `.node` file for sharp or canvas is actually present in the cache after injection. A missing platform package for either module now fails the native rebuild outright rather than merely clearing its throat.
+
+- **The alignment guard adds a third name to its roll**: `scripts/check-server-alignment.ts` now checks `@napi-rs/canvas` against the server's range as well. Because the server's root `package.json` acquires canvas only through `pdfjs-dist`'s optional dependencies, the guard reads that one range from `packages/quilltap/package.json` — the npx package's manifest, which names the native modules installed beside the tarball — and each guarded module now records which server manifest speaks for it.
+
 ## 4.2.2
 
 ### Fixes
