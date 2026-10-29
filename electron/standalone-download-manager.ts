@@ -220,8 +220,9 @@ export class StandaloneDownloadManager {
    * Copy native modules from the Electron app into the standalone directory.
    *
    * The standalone tarball ships without native modules (they're platform-
-   * specific). The Electron app bundles them in app.asar.unpacked/, rebuilt
-   * at build time against Electron's Node ABI by rebuild-native-modules.ts.
+   * specific). The Electron app bundles the platform's prebuilt N-API
+   * binaries, selected at build time by scripts/select-native-modules.ts, in
+   * app.asar.unpacked/.
    *
    * We copy (not symlink) because symlinked modules resolve their transitive
    * dependencies relative to the symlink target, where they aren't available.
@@ -317,6 +318,7 @@ export class StandaloneDownloadManager {
     // confirm each prebuilt binary is physically present in the cache.
     this.warnIfNativeBinaryMissing(standaloneNodeModules, '@img', 'sharp-');
     this.warnIfNativeBinaryMissing(standaloneNodeModules, '@napi-rs', 'canvas-');
+    this.warnIfDriverBinaryMissing(standaloneNodeModules);
   }
 
   /**
@@ -338,6 +340,17 @@ export class StandaloneDownloadManager {
       // Scope directory absent — fall through to the warning
     }
     console.warn(`[StandaloneDownloadManager] No native ${scope}/${prefix}* binary present after injection`);
+  }
+
+  /**
+   * Log a warning when the SQLite driver's prebuilt binary for this platform
+   * is absent from the standalone cache.
+   */
+  private warnIfDriverBinaryMissing(nodeModulesDir: string): void {
+    const expected = path.join(nodeModulesDir, 'better-sqlite3', 'prebuilds', `${process.platform}-${process.arch}.node`);
+    if (!fs.existsSync(expected)) {
+      console.warn(`[StandaloneDownloadManager] No native better-sqlite3 binary present after injection (expected ${expected})`);
+    }
   }
 
   /**

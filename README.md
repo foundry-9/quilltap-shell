@@ -85,7 +85,6 @@ The Launcher is a standard Electron application. Clone the repository, install d
 git clone https://github.com/foundry-9/quilltap-shell.git
 cd quilltap-shell
 npm install
-npm run electron:rebuild-native   # rebuilds better-sqlite3 and sharp against Electron's Node ABI
 npm run electron:dev               # development mode with hot reload
 ```
 
@@ -97,7 +96,7 @@ npm run electron:build:win         # Windows NSIS installer
 npm run electron:build:linux       # Linux AppImage + deb
 ```
 
-All build scripts run `electron:rebuild-native` before packaging.
+All build scripts run `electron:select-native` before packaging. It installs the platform's prebuilt native modules (sharp, canvas, SQLite driver) and probes the driver under Electron.
 
 ### Release Pipeline
 
@@ -115,7 +114,7 @@ The script reads the version from `package.json`, creates an annotated git tag, 
 
 The Launcher passes two environment variables to the server in all launch modes: `QUILLTAP_SHELL` (the Launcher version string) and `QUILLTAP_SHELL_CAPABILITIES` (a comma-delimited set of capability flags, currently empty, awaiting future flags like `OPENS_FS_PATH` and `DOWNLOADS_FILE`).
 
-In Direct mode, the Launcher downloads standalone server tarballs from GitHub Releases, unpacks them into a local cache, rebuilds native modules (`better-sqlite3`, `sharp`) against Electron's Node ABI, and spawns the Next.js standalone server as a child process. Server stdout/stderr is written to `embedded-server.log` in the data directory's logs folder.
+In Direct mode, the Launcher downloads standalone server tarballs from GitHub Releases, unpacks them into a local cache, installs the platform's prebuilt native modules (`better-sqlite3`, `sharp`, `@napi-rs/canvas`), and spawns the Next.js standalone server as a child process. Server stdout/stderr is written to `embedded-server.log` in the data directory's logs folder.
 
 Health checking polls the server's health endpoint with an abort callback for fatal errors — version guard blocks, migration failures, module-not-found — so the startup sequence fails fast instead of polling for two minutes against an unrecoverable state.
 
@@ -129,4 +128,4 @@ The server lives at [foundry-9/quilltap-server](https://github.com/foundry-9/qui
 
 ---
 
-*The Launcher exists because the distance between "I want to try this" and "I am using this" should be measured in clicks, not in terminal commands. It is a single download, a single install, and a single button. The machinery behind it — the VMs, the containers, the health checks, the version management, the native module rebuilds — is considerable, and it is all there so that you do not have to be. Come in. The Estate is waiting.*
+*The Launcher exists because the distance between "I want to try this" and "I am using this" should be measured in clicks, not in terminal commands. It is a single download, a single install, and a single button. The machinery behind it — the VMs, the containers, the health checks, the version management, the native module wrangling — is considerable, and it is all there so that you do not have to be. Come in. The Estate is waiting.*

@@ -33,8 +33,9 @@ jobs:
         run: npx tsx scripts/release/validate-tag.ts
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Electron builds — compile TypeScript, rebuild native modules for each
-  # platform's Electron ABI, package with electron-builder.
+  # Electron builds — compile TypeScript, select each platform's prebuilt
+  # native modules and probe the SQLite driver under Electron, package
+  # with electron-builder.
   # macOS also handles code signing + notarization.
   # ────────────────────────────────────────────────────────────────────────────
   build-electron-mac:
@@ -67,8 +68,8 @@ jobs:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
         run: npx tsx scripts/release/write-apple-api-key.ts
 
-      - name: Rebuild native modules for Electron
-        run: npx tsx scripts/rebuild-native-modules.ts
+      - name: Select native modules for Electron
+        run: npx tsx scripts/select-native-modules.ts
 
       - name: Compile Electron shell
         run: npx tsc -p electron/tsconfig.json
@@ -118,8 +119,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Rebuild native modules for Electron
-        run: npx tsx scripts/rebuild-native-modules.ts
+      - name: Select native modules for Electron
+        run: npx tsx scripts/select-native-modules.ts
 
       - name: Compile Electron shell
         run: npx tsc -p electron/tsconfig.json
@@ -159,8 +160,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Rebuild native modules for Electron
-        run: npx tsx scripts/rebuild-native-modules.ts
+      - name: Select native modules for Electron
+        run: npx tsx scripts/select-native-modules.ts
 
       - name: Compile Electron shell
         run: npx tsc -p electron/tsconfig.json

@@ -1,5 +1,19 @@
 # Quilltap Electron Shell Changelog
 
+## 4.2.5
+
+### Changes
+
+- **The SQLite driver is sent for its thirteenth season, and it arrives with its own tailoring**: `better-sqlite3-multiple-ciphers` leaves 12.11.1 for 13.0.3, bringing SQLite 3.53.4 and SQLite3MultipleCiphers 2.4.0 along in its luggage. Version 13 is a Node-API addon with a binary for every supported platform already sewn into the npm tarball, so the shell no longer compiles it against Electron's headers at build time. The `node-gyp` step is gone, as is the Electron headers download, and with them the ordering hazard that produced the wrong-ABI releases of 4.1.5 through 4.1.11. That hazard is not merely guarded against now; it has been removed from the premises entirely.
+
+- **The rebuild script retires, and a selector takes its place**: `scripts/rebuild-native-modules.ts` is now `scripts/select-native-modules.ts`, and `electron:rebuild-native` has become `electron:select-native`. The selector keeps the one prebuild the platform requires, discards the other seven along with the C sources, and so reduces what is carried and copied into the server cache on every boot from roughly 34 MB to roughly 3 MB. Its build-time probe under Electron still loads the driver, but now exercises the loader's platform detection and reports the cipher and SQLite version it finds. On Linux the prebuild asks for glibc 2.35 or newer (Ubuntu 22.04, Debian 12). This is no new floor, since the previous binary, compiled on Ubuntu 24.04, already needed more than that.
+
+- **The shell now shouts when the driver goes missing from the cache**: After injection, if the driver binary is not physically present in the server cache, the log says so, as it already does for sharp and canvas. The lesson of 4.1.14 applies here too: a version that matches is not the same as a binary that arrived. Nothing gates on compatibility, either. A 4.2.4 shell under a 4.12 server and a 4.2.5 shell under an older server are both supported configurations, and databases written by either driver open cleanly in the other.
+
+### Dependencies
+
+- **The housekeeping is done, and the driver's luggage is left at the desk**: `@electron/rebuild` leaves devDependencies, having no further use in the house. `bindings` and `file-uri-to-path` no longer travel in the packaged files, as the driver no longer depends upon them. The driver's `allowScripts` entry, once a warm welcome for its compiler, is now a polite but unmistakable refusal: `"better-sqlite3-multiple-ciphers": false`, as the server's own manifest already says. v13 declares no install script, but because it still carries a `binding.gyp` in its luggage, npm assumes one (`node-gyp rebuild`) and, left unrefused, was found quietly running it during a clean `npm ci`. The run compiled nothing (the driver's gyp file stands down when a prebuild is present), but a build that summons `node-gyp` at all has missed the point of the exercise, and on Windows it would want a C++ toolchain merely to be told it was not needed. Future Electron bumps no longer wait upon the driver fork tracking V8 internals; Electron's N-API version is the only contract that remains.
+
 ## 4.2.4
 
 ### Changes

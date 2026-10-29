@@ -12,11 +12,10 @@ files:
   - dist-electron/**/*
   - electron/splash/**/*
   - package.json
-  # Native modules rebuilt against Electron's ABI by rebuild-native-modules.ts.
-  # Copied into the downloaded standalone server's node_modules at runtime.
+  # Native modules: prebuilt N-API binaries selected for the target platform by
+  # scripts/select-native-modules.ts. Copied into the downloaded standalone
+  # server's node_modules at runtime.
   - node_modules/better-sqlite3/**/*
-  - node_modules/bindings/**/*
-  - node_modules/file-uri-to-path/**/*
   - node_modules/sharp/**/*
   - node_modules/@img/**/*
   - node_modules/tar/**/*
@@ -27,7 +26,8 @@ files:
   - node_modules/yauzl/**/*
   # Exclude everything else from the project
   - "!electron/*.ts"
-# Native modules are rebuilt in build scripts against Electron's Node ABI.
+# Native modules are prebuilt N-API binaries selected for the target platform
+# by scripts/select-native-modules.ts, so nothing needs rebuilding here.
 # Disable electron-builder's own @electron/rebuild to prevent it from scanning the
 # project's node_modules (which contains .bin symlinks that break macOS codesign).
 npmRebuild: false
