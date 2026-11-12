@@ -68,6 +68,10 @@
         <input type="checkbox" id="autoStartCheckbox">
         <span id="autoStartLabelText">Auto-start with last used directory</span>
       </label>
+      <label class="auto-start-label" id="exposeNetworkLabel" title="Unticked, Quilltap listens on 127.0.0.1 and receives callers from this machine alone. Ticked, it listens on every network interface (0.0.0.0), and other machines on your network may call on port 5050.">
+        <input type="checkbox" id="exposeNetworkCheckbox">
+        <span>Open to the network</span>
+      </label>
     </div>
     <div class="button-group">
       <button class="btn btn-primary" id="startBtn">Start</button>

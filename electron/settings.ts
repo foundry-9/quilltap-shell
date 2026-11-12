@@ -24,6 +24,8 @@ export interface AppSettings {
   declinedShellVersion: string;
   /** Whether to show pre-release / dev versions in the server version selector */
   showPrerelease: boolean;
+  /** Whether a shell-spawned server (embedded or Docker) listens on all interfaces instead of loopback only */
+  exposeToNetwork: boolean;
 }
 
 /** Derive a human-readable name for a data directory path */
@@ -44,6 +46,7 @@ function defaultSettings(): AppSettings {
     declinedServerVersion: '',
     declinedShellVersion: '',
     showPrerelease: false,
+    exposeToNetwork: false,
   };
 }
 
@@ -103,6 +106,7 @@ export function loadSettings(): AppSettings {
         declinedServerVersion: typeof parsed.declinedServerVersion === 'string' ? parsed.declinedServerVersion : defaults.declinedServerVersion,
         declinedShellVersion: typeof parsed.declinedShellVersion === 'string' ? parsed.declinedShellVersion : defaults.declinedShellVersion,
         showPrerelease: typeof parsed.showPrerelease === 'boolean' ? parsed.showPrerelease : defaults.showPrerelease,
+        exposeToNetwork: typeof parsed.exposeToNetwork === 'boolean' ? parsed.exposeToNetwork : defaults.exposeToNetwork,
       };
     }
   } catch (err) {

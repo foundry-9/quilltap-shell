@@ -44,6 +44,10 @@ The Launcher spawns nothing at all. You give it the address of a Quilltap server
 
 Starting, stopping, and updating that server is your affair — the Launcher will neither shut it down when you quit nor presume to choose its version. The data directory list and version selector disappear in this mode, because the remote server keeps its own data and knows its own version.
 
+### Who May Call: Open to the Network
+
+In Direct and Docker modes, the server the Launcher starts listens on `127.0.0.1` by default, so only the machine it runs on can reach it. Tick **Open to the network** on the splash screen and it listens on every interface (`0.0.0.0`) instead, which lets other machines reach it on port 5050 — for instance, another copy of the Launcher in Remote mode on the workstation in the study. The change takes effect the next time the server is started. Bear in mind that anyone who can reach the port can reach your Quilltap, so tick it on networks you trust.
+
 ## The Splash Screen
 
 When you launch the application, you'll see a splash screen with the Quilltap quill logo, three runtime buttons, a data directory list, and a server version selector. This is where all the decisions happen — and most of them have sensible defaults, so the typical first launch looks like this:

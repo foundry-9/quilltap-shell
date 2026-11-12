@@ -163,7 +163,7 @@ export class DockerManager {
    * Start a container with the configured data directory mounted.
    * Cleans up any existing container with the same name first.
    */
-  async startContainer(onOutput?: (line: string) => void): Promise<CommandResult> {
+  async startContainer(bindAddress: string, onOutput?: (line: string) => void): Promise<CommandResult> {
     if (!this.dataDir) {
       return { success: false, stdout: '', stderr: '', error: 'No data directory set' };
     }
@@ -177,7 +177,7 @@ export class DockerManager {
     }
 
     const imageRef = `${DOCKER_IMAGE}:${this.imageVersion}`;
-    console.log('[DockerManager] Starting container:', this.containerName, 'from', imageRef);
+    console.log('[DockerManager] Starting container:', this.containerName, 'from', imageRef, 'published on', bindAddress);
 
     const hostTimezone = detectHostTimezone();
     console.log('[DockerManager] Host timezone:', hostTimezone ?? '(undetected — container will use UTC)');
@@ -185,7 +185,9 @@ export class DockerManager {
     const args = [
       'run', '-d',
       '--name', this.containerName,
-      '-p', `${HOST_PORT}:${DOCKER_CONTAINER_PORT}`,
+      // The server inside the container always listens on all of the container's
+      // interfaces; the host side of the port mapping decides who can reach it.
+      '-p', `${bindAddress}:${HOST_PORT}:${DOCKER_CONTAINER_PORT}`,
       '-v', `${this.dataDir}:/app/quilltap`,
       '-e', `QUILLTAP_HOST_DATA_DIR=${this.dataDir}`,
       '-e', `QUILLTAP_SHELL=${APP_VERSION}`,

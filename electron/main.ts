@@ -12,6 +12,7 @@ import {
   APP_VERSION,
   DOCKER_IMAGE,
   HEALTH_MAX_ATTEMPTS,
+  hostBindAddress,
 } from './constants';
 import { DockerManager } from './docker-manager';
 import { EmbeddedManager } from './embedded-manager';
@@ -197,6 +198,7 @@ function sendDirectoryInfo(): void {
     serverVersion: appSettings.serverVersion || 'latest',
     availableVersions: versions || cachedAvailableVersions || [],
     showPrerelease: appSettings.showPrerelease,
+    exposeToNetwork: appSettings.exposeToNetwork,
     remoteServerUrl: appSettings.remoteServerUrl,
     minServerVersions,
     upgradeAvailable: checkForUpgrade(
@@ -1033,7 +1035,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     message: 'Starting Quilltap container...',
   });
 
-  const startResult = await dockerManager.startContainer((line) => {
+  const startResult = await dockerManager.startContainer(hostBindAddress(appSettings.exposeToNetwork), (line) => {
     sendSplashUpdate({
       phase: 'starting-container',
       message: 'Starting Quilltap container...',
@@ -1206,6 +1208,7 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
 
   embeddedManager.startServer(
     dataDir,
+    hostBindAddress(appSettings.exposeToNetwork),
     (line) => {
       console.log('[EmbeddedManager] output:', line);
 
@@ -1400,6 +1403,7 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     serverVersion: appSettings.serverVersion || 'latest',
     availableVersions: cachedAvailableVersions || [],
     showPrerelease: appSettings.showPrerelease,
+    exposeToNetwork: appSettings.exposeToNetwork,
     remoteServerUrl: appSettings.remoteServerUrl,
     minServerVersions: readMinServerVersions(),
   };
@@ -1458,6 +1462,13 @@ ipcMain.on('splash:set-server-version', (_event, version: string) => {
 ipcMain.on('splash:set-show-prerelease', (_event, enabled: boolean) => {
   console.log('[Main] Show prerelease set to:', enabled);
   appSettings.showPrerelease = enabled;
+  saveSettings(appSettings);
+});
+
+/** Toggle whether shell-spawned servers listen on all interfaces or loopback only */
+ipcMain.on('splash:set-expose-to-network', (_event, enabled: boolean) => {
+  console.log('[Main] Expose to network set to:', enabled);
+  appSettings.exposeToNetwork = enabled;
   saveSettings(appSettings);
 });
 

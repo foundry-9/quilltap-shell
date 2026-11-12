@@ -395,6 +395,10 @@ body {
 }
 
 .auto-start-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 22px;
   margin-bottom: 14px;
   -webkit-app-region: no-drag;
 }

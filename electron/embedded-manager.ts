@@ -122,6 +122,7 @@ export class EmbeddedManager {
    */
   startServer(
     dataDir: string,
+    bindAddress: string,
     onOutput?: (line: string) => void,
     onError?: (error: string) => void,
   ): void {
@@ -146,6 +147,7 @@ export class EmbeddedManager {
 
     console.log(`[EmbeddedManager] Spawning: ${process.execPath} ${serverPath}`);
     console.log(`[EmbeddedManager] Data dir: ${dataDir}`);
+    console.log(`[EmbeddedManager] Bind address: ${bindAddress}`);
 
     // Detect the host OS timezone to pass through to the server
     const hostTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -163,7 +165,7 @@ export class EmbeddedManager {
         ELECTRON_RUN_AS_NODE: '1',
         // Server configuration
         PORT: String(HOST_PORT),
-        HOSTNAME: '0.0.0.0',
+        HOSTNAME: bindAddress,
         NODE_ENV: 'production',
         QUILLTAP_DATA_DIR: dataDir,
         QUILLTAP_TIMEZONE: hostTimezone,

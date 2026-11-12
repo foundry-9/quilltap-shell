@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('quilltap', {
   setServerVersion: (version: string) => ipcRenderer.send('splash:set-server-version', version),
   /** Toggle pre-release version visibility in the version selector */
   setShowPrerelease: (enabled: boolean) => ipcRenderer.send('splash:set-show-prerelease', enabled),
+  /** Toggle whether a shell-spawned server listens on all interfaces (true) or loopback only (false) */
+  setExposeToNetwork: (enabled: boolean) => ipcRenderer.send('splash:set-expose-to-network', enabled),
   /** Accept an upgrade prompt — switches pinned version to the offered one */
   acceptUpgrade: (version: string) => ipcRenderer.send('splash:accept-upgrade', version),
   /** Decline an upgrade prompt — suppresses the prompt for this version */

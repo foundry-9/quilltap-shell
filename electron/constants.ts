@@ -33,8 +33,19 @@ export function standaloneDownloadUrl(version: string): string {
 /** Host port that maps to the server port */
 export const HOST_PORT = 5050;
 
-/** Health endpoint URL */
-export const HEALTH_URL = `http://localhost:${HOST_PORT}/api/health`;
+/** Health endpoint URL (IPv4 loopback explicitly, so it matches the default bind address) */
+export const HEALTH_URL = `http://127.0.0.1:${HOST_PORT}/api/health`;
+
+/** Loopback-only bind address: the server is reachable from this machine alone */
+export const LOOPBACK_BIND_ADDRESS = '127.0.0.1';
+
+/** All-interfaces bind address: the server is reachable from other machines on the network */
+export const NETWORK_BIND_ADDRESS = '0.0.0.0';
+
+/** Resolve the host bind address for a spawned server from the user's network-exposure setting */
+export function hostBindAddress(exposeToNetwork: boolean): string {
+  return exposeToNetwork ? NETWORK_BIND_ADDRESS : LOOPBACK_BIND_ADDRESS;
+}
 
 /** Milliseconds between health polls */
 export const HEALTH_POLL_INTERVAL_MS = 2000;

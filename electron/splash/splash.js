@@ -22,6 +22,8 @@ const startBtn = document.getElementById('startBtn');
 const chooserQuitBtn = document.getElementById('chooserQuitBtn');
 const autoStartCheckbox = document.getElementById('autoStartCheckbox');
 const autoStartLabelText = document.getElementById('autoStartLabelText');
+const exposeNetworkLabel = document.getElementById('exposeNetworkLabel');
+const exposeNetworkCheckbox = document.getElementById('exposeNetworkCheckbox');
 const changeDirLink = document.getElementById('changeDirLink');
 
 // Runtime mode elements
@@ -171,6 +173,7 @@ function updateModeSections() {
   remoteSection.style.display = isRemote ? '' : 'none';
   dataDirSection.style.display = isRemote ? 'none' : '';
   versionSection.style.display = isRemote ? 'none' : '';
+  exposeNetworkLabel.style.display = isRemote ? 'none' : '';
   startBtn.textContent = isRemote ? 'Connect' : 'Start';
   autoStartLabelText.textContent = isRemote
     ? 'Auto-start with connection to last Quilltap endpoint'
@@ -472,6 +475,7 @@ window.quilltap.onDirectories(function(data) {
   currentMinServerVersions = data.minServerVersions || {};
   renderDirectoryList(data.dirs, data.lastUsed, currentSizes, currentMinServerVersions);
   autoStartCheckbox.checked = data.autoStart;
+  exposeNetworkCheckbox.checked = !!data.exposeToNetwork;
 
   // Update runtime mode state
   currentRuntimeMode = data.runtimeMode || 'embedded';
@@ -574,6 +578,11 @@ remoteUrlInput.addEventListener('keydown', function(e) {
 /** Auto-start checkbox */
 autoStartCheckbox.addEventListener('change', function() {
   window.quilltap.setAutoStart(autoStartCheckbox.checked);
+});
+
+/** Network exposure checkbox (applies to Docker and Direct modes on next start) */
+exposeNetworkCheckbox.addEventListener('change', function() {
+  window.quilltap.setExposeToNetwork(exposeNetworkCheckbox.checked);
 });
 
 /** Change directory button during loading */

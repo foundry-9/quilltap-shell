@@ -1,5 +1,13 @@
 # Quilltap Electron Shell Changelog
 
+## 4.2.6
+
+### Changes
+
+- **The server learns to keep its door on the chain**: Until now the shell sent its embedded server out to listen on `0.0.0.0`, which is to say on every interface the machine possessed, so that any passer-by on the same café Wi-Fi could rap on port 5050 and be shown into the drawing room. Docker was no more discreet: its `-p 5050:5000` published the port on every host interface as well. Both modes now listen on `127.0.0.1` by default. The embedded server is started with `HOSTNAME=127.0.0.1`, and Docker publishes `127.0.0.1:5050:5000` (inside the container the server still listens on all of the container's interfaces, as it must; only the host side of the mapping decides who may call). Anyone who truly wishes to receive callers from elsewhere on the network may tick the new **Open to the network** checkbox on the chooser, which restores the old `0.0.0.0` arrangement for both modes on the next start. It is hidden in Remote mode, which has no listener of its own to open or shut. The setting is stored as `exposeToNetwork` and is off for everyone, including those upgrading, so anyone who had come to rely on reaching the shell's server from another machine will need to tick it once.
+
+- **The health check stops guessing at which loopback is meant**: The shell's health poll now asks for `127.0.0.1` by name rather than `localhost`, so that it cannot wander off to `::1` and find nobody home now that the server listens on IPv4 loopback alone. The main window still loads `http://localhost:5050`, so the browser origin, and with it every saved cookie and stored preference, stays exactly where it was.
+
 ## 4.2.5
 
 ### Changes

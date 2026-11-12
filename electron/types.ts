@@ -64,6 +64,8 @@ export interface DirectoryInfo {
   availableVersions: VersionOption[];
   /** Whether to show pre-release / dev versions in the version selector */
   showPrerelease: boolean;
+  /** Whether a shell-spawned server listens on all interfaces (true) or loopback only (false) */
+  exposeToNetwork: boolean;
   /** Saved remote server URL (empty string if never configured) */
   remoteServerUrl: string;
   /** Present when the pinned server version is older than the latest in the same channel */
