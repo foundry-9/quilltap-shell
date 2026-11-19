@@ -121,3 +121,26 @@ export interface CommandResult {
   stderr: string;
   error?: string;
 }
+
+/** One row of the server's navigation listing (GET /api/v1/system/navigation) */
+export type NavigationListingItem =
+  | { id: string; label: string; type: 'destination'; href: string }
+  | { id: string; label: string; type: 'action' };
+
+/** One native menu of the server's navigation listing */
+export interface NavigationListingGroup {
+  id: string;
+  label: string;
+  items: NavigationListingItem[];
+}
+
+/** The server's navigation listing, from which the Go and group menus are built */
+export interface NavigationListing {
+  version: number;
+  top: NavigationListingItem[];
+  groups: NavigationListingGroup[];
+  pinned: NavigationListingItem[];
+}
+
+/** The listing versions this shell can build menus from. */
+export const KNOWN_NAVIGATION_VERSIONS = [1] as const;

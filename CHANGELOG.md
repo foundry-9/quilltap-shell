@@ -1,5 +1,21 @@
 # Quilltap Electron Shell Changelog
 
+## 4.2.7
+
+### Changes
+
+- **The menu bar is handed the house plan instead of drawing its own**: The old **Navigate** menu was a list of eight rooms the shell had committed to memory, and every one of them was reached by knocking down the front door: a page load that unmounted the workspace, dropped every open tab's thoughts on the carpet, and cut a Salon reply off mid-sentence. The shell now asks the server for its navigation listing (`GET /api/v1/system/navigation`) once the main window is made, and builds a **Go** menu (the rail's top buttons, a separator, then its pinned ones) and one menu per group (**Conversations**, **Objects**, **Library**, **Studio** on today's servers) where Navigate used to stand, between Edit and View. Every label is the server's own, ellipses and all, and the shell hard-codes no item, so a new destination arrives without a shell release. The six familiar accelerators (Home, Projects, Files, Characters, Chats and Settings) are pinned to their items by id and no new ones are invented.
+
+- **A menu click now rings the bell rather than kicking in the door**: The preload gains `window.quilltap.onNavigate(handler)`, which the page calls once its rail is mounted. A menu click then sends the item's id to the page, which does precisely what a rail click does, with no reload and no interrupted reply. Until a handler is registered (on the unlock screen, during startup, or under a server that predates the bridge), a destination falls back to loading its address and an action, such as **New Chat…**, politely does nothing. Clicks are never queued to go off a minute later, and a reload or cross-document navigation forgets the handler until the new page registers again.
+
+- **Older servers keep the old furniture**: A server without the listing (anything before 4.14, which is common in Remote mode or with a pinned version), an unreadable answer, or a listing version the shell does not know all leave today's Navigate menu exactly where it was. The shell also now advertises `NATIVE_NAV_MENU` in `QUILLTAP_SHELL_CAPABILITIES`, so that a future server may know a menu bar is present to stand in for the rail.
+
+### Dependencies
+
+- **Electron is promoted four ranks at once, from 41 to 45**: The 41 line had passed out of support and was carrying a parcel of high-severity advisories (origins misattributed on permission prompts, SameSite cookies forgotten on link-opened windows, and other such lapses of etiquette) for which no 41 release would ever be issued. The shell now rides Electron 45.4.1, with Chromium 156 and Node.js 24.22.3, so the embedded server runs on Node 24 as well, which is what the server asks for in any case. The only casualty was the image-copying errand: Electron 44 recast the main-process `clipboard` after the W3C fashion and dismissed `writeImage`, so **Copy image** now hands the clipboard a PNG `ClipboardItem` and awaits its receipt (and reports failure, rather than success, when the image cannot be decoded at all). The SQLite driver, sharp and canvas are Node-API addons and loaded under the new Electron without so much as a cough. Electron 44 and later require macOS 13 or newer and 64-bit builds only; every target this shell builds already met that standard.
+
+- **The SQLite driver catches up with the company it keeps**: `better-sqlite3-multiple-ciphers` moves from 13.0.3 to 13.2.0, bringing SQLite 3.54.1. The server had already asked for `^13.1.1`, and since the shell's copy is the one injected into the embedded server, the shell had been quietly handing it an older driver than it requested. The alignment guard approves, and the driver loads under Electron with its ciphers intact.
+
 ## 4.2.6
 
 ### Changes

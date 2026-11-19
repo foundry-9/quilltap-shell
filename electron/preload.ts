@@ -1,7 +1,33 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { SplashUpdate, DirectoryInfo } from './types';
 
+/**
+ * The page's current navigation handler. Only one is kept: a new registration
+ * replaces the old, and a reload discards it along with the page.
+ */
+let navHandler: ((itemId: string) => void) | null = null;
+
+ipcRenderer.on('quilltap:navigate', (_event, itemId: unknown) => {
+  if (typeof navHandler === 'function') navHandler(String(itemId));
+});
+
 contextBridge.exposeInMainWorld('quilltap', {
+  // --- Native navigation menus ---
+  /**
+   * Register the page's handler for navigation menu clicks. Returns an
+   * unsubscribe that clears the handler only if it is still the current one.
+   */
+  onNavigate: (handler: (itemId: string) => void): (() => void) => {
+    navHandler = handler;
+    ipcRenderer.send('quilltap:nav-handler', true);
+    return () => {
+      if (navHandler === handler) {
+        navHandler = null;
+        ipcRenderer.send('quilltap:nav-handler', false);
+      }
+    };
+  },
+
   // --- Existing splash lifecycle ---
   onUpdate: (callback: (data: SplashUpdate) => void) => {
     ipcRenderer.on('splash:update', (_event, data: SplashUpdate) => callback(data));

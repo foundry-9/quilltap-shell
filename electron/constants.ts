@@ -112,4 +112,4 @@ export const APP_VERSION = (() => {
  * the shell gains functionality the server needs to know about (e.g.
  * "OPENS_FS_PATH", "DOWNLOADS_FILE").
  */
-export const SHELL_CAPABILITIES = 'SPELLCHECK_DICTIONARY';
+export const SHELL_CAPABILITIES = 'SPELLCHECK_DICTIONARY,NATIVE_NAV_MENU';

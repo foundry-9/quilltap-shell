@@ -1,6 +1,6 @@
 {
   "name": "quilltap-shell",
-  "version": "4.2.6",
+  "version": "4.2.7",
   "description": "Electron desktop shell for the Quilltap server",
   "main": "dist-electron/main.js",
   "private": true,
@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.1.1",
-    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^13.0.3",
+    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^13.2.0",
     "electron-updater": "^6.8.11",
     "sharp": "^0.35.5",
     "tar": "^7.5.23",
@@ -41,7 +41,7 @@
     "@electron/notarize": "^3.1.2",
     "@types/semver": "^7.8.0",
     "cross-env": "^10.1.0",
-    "electron": "^41.10.7",
+    "electron": "^45.4.1",
     "electron-builder": "^26.18.0",
     "semver": "^7.8.6",
     "typescript": "^6.0.3"

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -18,7 +18,8 @@ import { DockerManager } from './docker-manager';
 import { EmbeddedManager } from './embedded-manager';
 import { StandaloneDownloadManager } from './standalone-download-manager';
 import { HealthChecker } from './health-checker';
-import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, WindowBounds, VersionOption } from './types';
+import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, WindowBounds, VersionOption, NavigationListing, NavigationListingItem } from './types';
+import { buildNavigationMenus, fetchNavigationListing } from './navigation-menu';
 import { AppSettings, loadSettings, saveSettings, saveWindowBounds, getWindowBounds, defaultNameForPath } from './settings';
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
@@ -115,6 +116,16 @@ function serverBaseUrl(): string {
     return appSettings.remoteServerUrl;
   }
   return `http://localhost:${HOST_PORT}`;
+}
+
+/**
+ * The origin for main-process requests to the server. Same as serverBaseUrl,
+ * except that a shell-managed server is asked for by IPv4 loopback, matching
+ * the address it listens on (localhost may resolve to ::1 in Node).
+ */
+function serverFetchBaseUrl(): string {
+  const base = serverBaseUrl();
+  return base === `http://localhost:${HOST_PORT}` ? `http://127.0.0.1:${HOST_PORT}` : base;
 }
 
 /**
@@ -410,28 +421,53 @@ async function changeSite(): Promise<void> {
   });
 }
 
-/** Build the application menu with Navigate items */
-function buildAppMenu(win: BrowserWindow): void {
-  const appOrigin = serverBaseUrl();
+/**
+ * Whether each page has registered a navigation handler through the preload's
+ * `onNavigate`. Keyed by webContents, so the splash (which never registers)
+ * and the main window cannot confuse one another.
+ */
+const navHandlerReady = new WeakMap<Electron.WebContents, boolean>();
 
-  const navigateItems: { label: string; path: string; accelerator?: string }[] = [
-    { label: 'Home', path: '/', accelerator: 'CmdOrCtrl+Shift+H' },
-    { label: 'Projects', path: '/prospero', accelerator: 'CmdOrCtrl+Shift+P' },
-    { label: 'Files', path: '/files', accelerator: 'CmdOrCtrl+Shift+F' },
-    { label: 'Characters', path: '/aurora', accelerator: 'CmdOrCtrl+Shift+C' },
-    { label: 'Chats', path: '/salon', accelerator: 'CmdOrCtrl+Shift+S' },
-    { label: 'Settings', path: '/settings', accelerator: 'CmdOrCtrl+,' },
-    { label: 'Profile', path: '/profile' },
-    { label: 'About', path: '/about' },
-  ];
+ipcMain.on('quilltap:nav-handler', (event, ready: boolean) => {
+  navHandlerReady.set(event.sender, Boolean(ready));
+});
 
-  const navigateSubmenu = navigateItems.map(({ label, path, accelerator }) => ({
-    label,
-    accelerator,
-    click: () => {
-      win.webContents.loadURL(`${appOrigin}${path}`);
-    },
-  }));
+/**
+ * Activate a navigation menu item. With a registered page handler, send the
+ * id so the page does exactly what a rail click does, without a reload.
+ * Otherwise load a destination's href, and let an action do nothing. Clicks
+ * are never queued for a handler that has not yet appeared.
+ */
+function activateNavItem(win: BrowserWindow, item: NavigationListingItem): void {
+  if (win.isDestroyed()) return;
+  const wc = win.webContents;
+  if (navHandlerReady.get(wc)) {
+    wc.send('quilltap:navigate', item.id);
+    return;
+  }
+  if (item.type === 'destination') {
+    wc.loadURL(new URL(item.href, serverBaseUrl()).toString());
+  }
+}
+
+/**
+ * Fetch the server's navigation listing and, if it can be used, rebuild the
+ * menu bar with Go and the group menus. Fetched once per main window; a
+ * failure keeps the legacy Navigate menu for that window's life.
+ */
+async function loadNavigationMenus(win: BrowserWindow): Promise<void> {
+  const listing = await fetchNavigationListing(serverFetchBaseUrl());
+  if (!listing || win.isDestroyed() || mainWindow !== win) return;
+  console.log('[Navigation] Listing received, building navigation menus');
+  buildAppMenu(win, listing);
+}
+
+/**
+ * Build the application menu. Navigation comes from the server's listing
+ * when one has been fetched, else the legacy Navigate menu.
+ */
+function buildAppMenu(win: BrowserWindow, listing: NavigationListing | null = null): void {
+  const navigationMenus = buildNavigationMenus(listing, (item) => activateNavItem(win, item));
 
   const serverItems: Electron.MenuItemConstructorOptions[] = [
     {
@@ -482,10 +518,7 @@ function buildAppMenu(win: BrowserWindow): void {
         { role: 'selectAll' },
       ],
     },
-    {
-      label: 'Navigate',
-      submenu: navigateSubmenu,
-    },
+    ...navigationMenus,
     {
       label: 'View',
       submenu: [
@@ -722,7 +755,15 @@ function createMainWindow(urlPath?: string): BrowserWindow {
     mainWindow = null;
   });
 
+  // A cross-document navigation or reload discards the page and its handler;
+  // forget it until the new page registers again. In-page route changes do
+  // not fire this.
+  win.webContents.on('did-navigate', () => {
+    navHandlerReady.set(win.webContents, false);
+  });
+
   buildAppMenu(win);
+  void loadNavigationMenus(win);
 
   return win;
 }
@@ -1640,9 +1681,14 @@ ipcMain.handle('app:download-url', async (_event, url: string) => {
   mainWindow.webContents.downloadURL(fullUrl);
 });
 
-ipcMain.handle('app:copy-image-to-clipboard', (_event, dataUrl: string) => {
-  const image = nativeImage.createFromDataURL(dataUrl);
-  clipboard.writeImage(image);
+ipcMain.handle('app:copy-image-to-clipboard', async (_event, dataUrl: string) => {
+  // Re-encode through nativeImage so any data-URL image type reaches the
+  // clipboard as PNG, the one image format every platform accepts.
+  const png = nativeImage.createFromDataURL(dataUrl).toPNG();
+  if (png.length === 0) return false;
+  await clipboard.write([
+    new ClipboardItem({ 'image/png': new Blob([new Uint8Array(png)], { type: 'image/png' }) }),
+  ]);
   return true;
 });
 
